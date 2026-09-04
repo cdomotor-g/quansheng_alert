@@ -1,6 +1,6 @@
 {
-  "generated": "2026-09-04 06:24 UTC",
-  "commit": "cad25a6",
+  "generated": "2026-09-04 06:39 UTC",
+  "commit": "7f8f06b",
   "builds": [
     {
       "id": "default",
@@ -10,12 +10,18 @@
       "raw_file": "firmware/quansheng-alert-default.bin",
       "size": 61018,
       "raw_size": 61000,
-      "sha256": "af2455f54f1b8284078eaa0479b60cf2c33af96ab16842159caac6063c7b8b28",
+      "sha256": "6e1773184399fccae48d1c97f8367fca98256ec132f174400f26945b7a7062b2",
       "stations": 379,
       "addresses": 849,
-      "commit": "cad25a6",
+      "commit": "7f8f06b",
       "built": "2026-09-04",
-      "order": 10
+      "order": 10,
+      "stations_from": {
+        "repo": "cdomotor-g/MegaNet",
+        "commit": "9733b2a",
+        "date": "2026-09-04",
+        "fingerprint": "73fd215"
+      }
     },
     {
       "id": "constitution-hill",
@@ -25,12 +31,18 @@
       "raw_file": "firmware/quansheng-alert-constitution-hill.bin",
       "size": 60978,
       "raw_size": 60960,
-      "sha256": "028b4335d92bed22cc55d51a591ea52605911a658f80d81f421e93b1a727141d",
+      "sha256": "67e529916fd0bf61a9a48ca2a8957b151be3213c774e778bb8284ced81dd6f10",
       "stations": 403,
       "addresses": 922,
-      "commit": "cad25a6",
+      "commit": "7f8f06b",
       "built": "2026-09-04",
-      "order": 20
+      "order": 20,
+      "stations_from": {
+        "repo": "cdomotor-g/MegaNet",
+        "commit": "9733b2a",
+        "date": "2026-09-04",
+        "fingerprint": "2512505"
+      }
     }
   ]
 }

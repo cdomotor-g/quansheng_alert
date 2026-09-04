@@ -19,6 +19,7 @@ Standard library only.
 """
 
 import argparse
+import hashlib
 import csv
 import io
 import json
@@ -575,21 +576,43 @@ def c_escape(s):
     return "".join(out)
 
 
+def table_fingerprint(sites, offsets, pool_order):
+    """A short hash of the table this header will contain.
+
+    Deliberately *not* MegaNet's commit id. The radio shows this string, and a
+    build is rewritten whenever it changes, so it has to identify the station
+    data itself - otherwise every unrelated commit in MegaNet would produce a
+    "new" firmware carrying an identical table. Which MegaNet commit the data
+    came from is recorded in docs/firmware/manifest.json instead.
+    """
+    h = hashlib.sha256()
+    for site in sites:
+        h.update(("%d,%d,%s;" % (site.base, site.kinds, site.name)).encode())
+    for name in pool_order:
+        h.update(("%d:%s;" % (offsets[name], name)).encode())
+    return h.hexdigest()[:7]
+
+
 def render_header(sites, src, filter_path):
     offsets, pool_order, pool_len = build_pool(sites)
     addresses = sum(len(s.members) for s in sites)
     total = SITE_BYTES * len(sites) + pool_len
+    fingerprint = table_fingerprint(sites, offsets, pool_order)
 
     out = []
     w = out.append
     w("// GENERATED FILE - do not edit. Regenerate with: python3 tools/gen_stations.py")
-    w("// Source: %s @ %s (%s)  filter: %s" % (REPO, src.short_sha, src.date, filter_path))
-    w("// Sites: %d   Addresses covered: %d   Table bytes: %d"
-      % (len(sites), addresses, total))
+    w("// Source: %s  filter: %s" % (REPO, filter_path))
+    w("// Sites: %d   Addresses covered: %d   Table bytes: %d   Data: %s"
+      % (len(sites), addresses, total, fingerprint))
+    w("//")
+    w("// The MegaNet commit this was generated from is recorded in")
+    w("// docs/firmware/manifest.json, not here: it changes on every unrelated")
+    w("// push to MegaNet, and anything in this file ends up in the firmware image.")
     w("#pragma once")
     w("#include <stdint.h>")
     w("#define ALERT_STATIONS_COUNT %d" % len(sites))
-    w('#define ALERT_STATIONS_SOURCE "MegaNet@%s"' % src.short_sha)
+    w('#define ALERT_STATIONS_SOURCE "MegaNet:%s"' % fingerprint)
     w('// One entry per "site": a base ALERT id plus up to 5 consecutive addresses '
       "(base..base+4).")
     w("// kinds packs 3 bits per offset: bits 0-2 = base+0, bits 3-5 = base+1, "
@@ -676,6 +699,12 @@ def main(argv=None):
                     help="print per-network / per-catchment costs and exit")
     ap.add_argument("--check", action="store_true",
                     help="exit 1 if the output would change (for CI)")
+    ap.add_argument("--provenance-out", default=None,
+                    help="write the MegaNet commit and date here as JSON. That "
+                         "provenance is deliberately kept out of the generated "
+                         "header, because anything in the header ends up in the "
+                         "firmware image and would rewrite it on every unrelated "
+                         "MegaNet push")
     args = ap.parse_args(argv)
 
     src = load_sources(args.meganet_dir, args.meganet_ref)
@@ -710,6 +739,17 @@ def main(argv=None):
     text = render_header(sites, src, os.path.basename(args.filter))
     total = table_bytes(sites)
     addresses = sum(len(s.members) for s in sites)
+
+    if args.provenance_out:
+        m = re.search(r"Data: (\w+)", text)
+        os.makedirs(os.path.dirname(os.path.abspath(args.provenance_out)) or ".", exist_ok=True)
+        with open(args.provenance_out, "w") as fh:
+            json.dump({"repo": REPO, "commit": src.short_sha, "commit_full": src.sha,
+                       "date": src.date, "filter": os.path.basename(args.filter),
+                       "sites": len(sites), "addresses": addresses, "bytes": total,
+                       "fingerprint": m.group(1) if m else None}, fh, indent=2)
+            fh.write("\n")
+        print("Wrote %s" % args.provenance_out)
 
     net_rows = network_costs(selected, repeater_nets, src.stations)
 

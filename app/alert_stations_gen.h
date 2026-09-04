@@ -1,10 +1,14 @@
 // GENERATED FILE - do not edit. Regenerate with: python3 tools/gen_stations.py
-// Source: cdomotor-g/MegaNet @ f223d54 (2026-09-04)  filter: stations.filter
-// Sites: 379   Addresses covered: 849   Table bytes: 6374
+// Source: cdomotor-g/MegaNet  filter: stations.filter
+// Sites: 379   Addresses covered: 849   Table bytes: 6374   Data: 73fd215
+//
+// The MegaNet commit this was generated from is recorded in
+// docs/firmware/manifest.json, not here: it changes on every unrelated
+// push to MegaNet, and anything in this file ends up in the firmware image.
 #pragma once
 #include <stdint.h>
 #define ALERT_STATIONS_COUNT 379
-#define ALERT_STATIONS_SOURCE "MegaNet@f223d54"
+#define ALERT_STATIONS_SOURCE "MegaNet:73fd215"
 // One entry per "site": a base ALERT id plus up to 5 consecutive addresses (base..base+4).
 // kinds packs 3 bits per offset: bits 0-2 = base+0, bits 3-5 = base+1, ... bits 12-14 = base+4.
 // kind codes: 0 none, 1 RAIN, 2 LEVEL, 3 BATT, 4 REP, 5 OTHER, 6 CHECK

@@ -166,5 +166,28 @@ class GenStationsTest(unittest.TestCase):
         self.assertEqual(self.text, generate(), "two runs produced different output")
 
 
+    def test_header_carries_no_meganet_commit(self):
+        """The header must not stamp MegaNet's HEAD commit.
+
+        Anything in this file is compiled into the firmware image, so a commit id
+        here would rewrite both binaries on every unrelated push to MegaNet even
+        though the station table is identical. The provenance lives in
+        docs/firmware/manifest.json instead; the header carries a fingerprint of
+        the table's own contents.
+        """
+        text = self.text
+        self.assertIsNotNone(re.search(r"^// Sites: .*Data: [0-9a-f]{7}$", text, re.M),
+                             "header should carry a data fingerprint")
+        m = re.search(r'#define ALERT_STATIONS_SOURCE "MegaNet:([0-9a-f]{7})"', text)
+        self.assertIsNotNone(m, "ALERT_STATIONS_SOURCE should be MegaNet:<fingerprint>")
+
+        # the fingerprint in the summary comment and the define must agree
+        summary = re.search(r"Data: ([0-9a-f]{7})", text).group(1)
+        self.assertEqual(summary, m.group(1))
+
+        # and nothing that looks like a git short sha should be attributed to MegaNet
+        self.assertNotRegex(text, r"MegaNet\s*@\s*[0-9a-f]{7}",
+                            "the MegaNet commit must not appear in the compiled header")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

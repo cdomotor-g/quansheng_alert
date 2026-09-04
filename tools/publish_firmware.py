@@ -66,6 +66,10 @@ def main() -> int:
     ap.add_argument("--order", type=int, default=50, help="sort key on the page")
     ap.add_argument("--header", default="app/alert_stations_gen.h",
                     help="generated station table, read for the station count")
+    ap.add_argument("--provenance", default=None,
+                    help="JSON from gen_stations.py --provenance-out; folded into "
+                         "the manifest so the installer can still say which MegaNet "
+                         "snapshot a build came from")
     args = ap.parse_args()
 
     raw = Path(args.raw)
@@ -79,6 +83,13 @@ def main() -> int:
     base = f"quansheng-alert-{args.variant}"
     shutil.copyfile(raw, FWDIR / f"{base}.bin")
     shutil.copyfile(packed, FWDIR / f"{base}.packed.bin")
+
+    provenance = {}
+    if args.provenance:
+        try:
+            provenance = json.loads(Path(args.provenance).read_text())
+        except (OSError, json.JSONDecodeError) as err:
+            print(f"warning: could not read {args.provenance}: {err}", file=sys.stderr)
 
     packed_bytes = packed.read_bytes()
     entry = {
@@ -96,6 +107,13 @@ def main() -> int:
         "built": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "order": args.order,
     }
+    if provenance:
+        entry["stations_from"] = {
+            "repo": provenance.get("repo"),
+            "commit": provenance.get("commit"),
+            "date": provenance.get("date"),
+            "fingerprint": provenance.get("fingerprint"),
+        }
 
     manifest = {"builds": []}
     if MANIFEST.is_file():

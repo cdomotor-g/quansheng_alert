@@ -45,10 +45,11 @@ jobs:
       # image and does not churn the binaries committed for the installer.
       - name: Build the default variant
         run: |
-          python3 tools/gen_stations.py
+          python3 tools/gen_stations.py --provenance-out /tmp/stations-default.json
           make -j VERSION_STRING="$(tools/srcid.sh)"
           arm-none-eabi-size firmware
           python3 tools/publish_firmware.py \
+            --provenance /tmp/stations-default.json \
             --variant default \
             --title "Default — Mt Kanigan and neighbours" \
             --description "Wide Bay / Burnett and central Queensland: Mt Kanigan, Mt Glorious, Barcaldine." \
@@ -58,10 +59,12 @@ jobs:
       # the RSSI bar come out to make room.
       - name: Build the South-East Queensland variant
         run: |
-          python3 tools/gen_stations.py --filter filters/constitution-hill.filter --max-bytes 7000
+          python3 tools/gen_stations.py --filter filters/constitution-hill.filter --max-bytes 7000 \
+            --provenance-out /tmp/stations-seq.json
           make clean && make -j ENABLE_FLASHLIGHT=0 ENABLE_RSSI_BAR=0 VERSION_STRING="$(tools/srcid.sh)"
           arm-none-eabi-size firmware
           python3 tools/publish_firmware.py \
+            --provenance /tmp/stations-seq.json \
             --variant constitution-hill \
             --title "South-East Queensland" \
             --description "The Constitution Hill network: Brisbane, Ipswich, Logan, Gold and Sunshine Coasts." \
