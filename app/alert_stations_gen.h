@@ -1,10 +1,10 @@
 // GENERATED FILE - do not edit. Regenerate with: python3 tools/gen_stations.py
-// Source: cdomotor-g/MegaNet @ 9733b2a (2026-09-04)  filter: stations.filter
+// Source: cdomotor-g/MegaNet @ f223d54 (2026-09-04)  filter: stations.filter
 // Sites: 379   Addresses covered: 849   Table bytes: 6374
 #pragma once
 #include <stdint.h>
 #define ALERT_STATIONS_COUNT 379
-#define ALERT_STATIONS_SOURCE "MegaNet@9733b2a"
+#define ALERT_STATIONS_SOURCE "MegaNet@f223d54"
 // One entry per "site": a base ALERT id plus up to 5 consecutive addresses (base..base+4).
 // kinds packs 3 bits per offset: bits 0-2 = base+0, bits 3-5 = base+1, ... bits 12-14 = base+4.
 // kind codes: 0 none, 1 RAIN, 2 LEVEL, 3 BATT, 4 REP, 5 OTHER, 6 CHECK

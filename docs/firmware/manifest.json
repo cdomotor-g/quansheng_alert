@@ -1,6 +1,6 @@
 {
-  "generated": "2026-09-04 05:10 UTC",
-  "commit": "d5d7abd",
+  "generated": "2026-09-04 06:24 UTC",
+  "commit": "cad25a6",
   "builds": [
     {
       "id": "default",
@@ -10,10 +10,10 @@
       "raw_file": "firmware/quansheng-alert-default.bin",
       "size": 61018,
       "raw_size": 61000,
-      "sha256": "5db865efd7f0bc5cdd54ec9d084b45ac6ed445c6d6dba4d0d4cabf7995f6c9e4",
+      "sha256": "af2455f54f1b8284078eaa0479b60cf2c33af96ab16842159caac6063c7b8b28",
       "stations": 379,
       "addresses": 849,
-      "commit": "d5d7abd",
+      "commit": "cad25a6",
       "built": "2026-09-04",
       "order": 10
     },
@@ -25,10 +25,10 @@
       "raw_file": "firmware/quansheng-alert-constitution-hill.bin",
       "size": 60978,
       "raw_size": 60960,
-      "sha256": "129edb7a5e032acd26d346d0a00829eb4852b580b7781f9607bd0f6e2045bbf1",
+      "sha256": "028b4335d92bed22cc55d51a591ea52605911a658f80d81f421e93b1a727141d",
       "stations": 403,
       "addresses": 922,
-      "commit": "d5d7abd",
+      "commit": "cad25a6",
       "built": "2026-09-04",
       "order": 20
     }
