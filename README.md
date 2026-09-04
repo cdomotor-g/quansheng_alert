@@ -153,14 +153,24 @@ cable, and does the whole job itself: it carries the firmware, backs your radio 
 before touching it, waits for you to put the radio in bootloader mode, writes the
 firmware and then confirms what the radio is running afterwards. You need:
 
-* the radio and its **USB programming cable** (the Kenwood-style two-pin plug, the
-  same cable CHIRP uses), and
+* the radio and a **two-pin programming cable** (the Kenwood "K1" type, the same one
+  Baofeng radios and CHIRP use: a 3.5 mm and a 2.5 mm plug at one end, USB at the
+  other), and
 * **Chrome or Edge on a desktop or laptop** — the installer needs Web Serial, which
   Firefox, Safari and every mobile browser lack.
 
 The four steps are: pick a build, connect, back up, install. Each screen explains
 what it is doing and what to do if it goes wrong, and the installer refuses to send
 anything it cannot verify first.
+
+> **The radio's own USB-C socket cannot be used for this.** On the UV-K5(8) and UV-K6
+> it is wired to the charging circuit only — its data pins do not reach the radio's
+> serial lines — so no tool can flash or program through it: not this installer, not
+> the official Quansheng software, not CHIRP, not `k5prog`. The two-pin cable is the
+> only way in. Many kits include one alongside the charging cable, so check the box
+> before buying; if you do buy one, prefer a **CH340** cable, because the cheap
+> "PL2303" ones are frequently counterfeit chips that current Windows drivers refuse
+> to run.
 
 **Nothing here can permanently damage the radio.** The bootloader lives in a separate
 part of the chip that is never written, so an interrupted flash leaves the radio in
