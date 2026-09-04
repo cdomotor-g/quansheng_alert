@@ -111,83 +111,105 @@
 <section class="card" id="pinout">
   <h2>The pinout</h2>
   <div id="pinout-body">
-    <p>Only <strong>three</strong> connections matter: ground, the line the radio talks on,
-       and the line it listens on. Everything else in the socket — speaker, microphone,
-       battery voltage — is left alone.</p>
-
-    <p class="hint note"><strong>Read the caveat before you cut anything.</strong> The table
-       below is traced from the community’s
-       <a href="https://github.com/ludwich66/Quansheng_UV-K5_Wiki" target="_blank" rel="noopener">reverse-engineered
-       KiCad schematic of the UV-K5 PCB</a> (sheet <code>USB2SERIAL.kicad_sch</code>, titled
-       “Kenwood Programming Cable”), which is the best primary source there is. But that sheet
-       labels its two plug symbols the opposite way round from the universal Kenwood&nbsp;K1
-       convention — it puts the speaker on the 2.5&nbsp;mm plug and the microphone on the
-       3.5&nbsp;mm one, where every radio of this family has speaker on the 3.5&nbsp;mm.
-       Other published pinouts disagree again on which conductor carries ground. So: the
-       <em>signals</em> below are solid and agreed by every source; which physical conductor
-       each lands on is worth <a href="#verify">measuring on your own radio</a>, which takes
-       two minutes and settles it for the radio in your hand.</p>
+    <p>Only <strong>three</strong> connections matter: ground, the line the radio listens on,
+       and the line it talks on. Everything else in the socket — speaker, microphone, battery
+       voltage — is left alone. <strong>Both plugs are three-conductor (TRS)</strong>, not
+       two-conductor.</p>
 
     <table class="pins">
-      <thead><tr><th>Signal</th><th>Where it is</th><th>Connect to</th><th>Certainty</th></tr></thead>
+      <thead><tr><th>Signal</th><th>Plug</th><th>Conductor</th><th>Wire it to</th><th>Certainty</th></tr></thead>
       <tbody>
         <tr>
-          <td class="sig">Radio TX<br><span class="muted">(radio → PC)</span></td>
-          <td>On the <strong>microphone / PTT plug</strong> — the same contact as MIC− and PTT.
-              By the K1 convention that is the <strong>2.5&nbsp;mm</strong> plug, <strong>tip</strong>.</td>
-          <td>The adapter’s <strong>RX</strong></td>
-          <td><span class="conf yes">confirmed</span></td>
+          <td class="sig">Radio RX<br><span class="muted">(PC → radio)</span></td>
+          <td>3.5 mm</td>
+          <td><strong>Sleeve</strong><br><span class="muted">shared with MIC− and external PTT</span></td>
+          <td>adapter <strong>TX</strong>, through the 1 kΩ resistor</td>
+          <td><span class="conf yes">4 sources</span></td>
         </tr>
         <tr>
-          <td class="sig">Radio RX<br><span class="muted">(PC → radio)</span></td>
-          <td>On the <strong>speaker plug</strong> — by the K1 convention the
-              <strong>3.5&nbsp;mm</strong> plug, <strong>ring</strong>.</td>
-          <td>The adapter’s <strong>TX</strong>, through the 1&nbsp;kΩ resistor</td>
-          <td><span class="conf yes">schematic</span></td>
+          <td class="sig">Radio TX<br><span class="muted">(radio → PC)</span></td>
+          <td>2.5 mm</td>
+          <td><strong>Ring</strong></td>
+          <td>adapter <strong>RX</strong></td>
+          <td><span class="conf yes">3 sources</span></td>
         </tr>
         <tr>
           <td class="sig">Ground</td>
-          <td>The schematic puts it on the <strong>tip of the speaker plug</strong>; other
-              sources put it on the sleeve of the mic plug. Both grounds are common inside the
-              radio, so either works — <a href="#verify">find it with a meter</a>.</td>
-          <td>The adapter’s <strong>GND</strong></td>
-          <td><span class="conf meas">measure it</span></td>
+          <td>2.5 mm</td>
+          <td><strong>Sleeve</strong></td>
+          <td>adapter <strong>GND</strong></td>
+          <td><span class="conf yes">3 sources</span></td>
         </tr>
         <tr>
-          <td class="sig">V+ (battery)</td>
-          <td>Present on one sleeve. <strong>Leave it unconnected.</strong></td>
-          <td>nothing</td>
-          <td><span class="conf meas">measure it</span></td>
+          <td class="sig">Speaker +</td><td>2.5 mm</td><td>Tip</td>
+          <td>nothing — <strong>and see the warning below</strong></td>
+          <td><span class="conf yes">3 sources</span></td>
         </tr>
         <tr>
-          <td class="sig">Speaker, MIC+</td>
-          <td>Audio. Not used for programming.</td>
-          <td>nothing</td>
-          <td><span class="conf yes">schematic</span></td>
+          <td class="sig">MIC +</td><td>3.5 mm</td><td>Ring</td><td>nothing</td>
+          <td><span class="conf yes">2 sources</span></td>
+        </tr>
+        <tr>
+          <td class="sig">+V out</td><td>3.5 mm</td><td>Tip</td>
+          <td>nothing — never connect this</td>
+          <td><span class="conf yes">2 sources</span></td>
         </tr>
       </tbody>
     </table>
-    <p class="hint"><span class="conf yes">confirmed</span> = the reverse-engineered schematic
-       and the published community pinouts agree.
-       <span class="conf meas">measure it</span> = sources disagree, so find it on your own
-       radio with the procedure below. Either way the measurement takes two minutes and is the
-       last word.</p>
 
-    <p class="warn"><strong>One consequence of the shared line worth understanding.</strong>
-       The radio’s transmit line doubles as MIC−/PTT — the line the radio watches to decide
-       whether you are pressing the push-to-talk button. Pulling it to ground can therefore key
-       the transmitter. That is why the adapter’s <strong>RX</strong> — an input, which never
-       drives anything — is the pin that goes there, and why the series resistor is on the
-       other line. Get those two the wrong way round without the resistor and you can have the
-       adapter fighting the radio’s output, and the radio transmitting when you did not ask it
-       to.</p>
+    <p class="hint">Sources: the
+       <a href="https://www.chirpmyradio.com/projects/chirp/wiki/CableGuide" target="_blank" rel="noopener">CHIRP cable guide</a>,
+       <a href="https://www.miklor.com/COM/UV_Technical.php" target="_blank" rel="noopener">Miklor’s pinout table</a>,
+       the <a href="https://github.com/ludwich66/Quansheng_UV-K5_Wiki" target="_blank" rel="noopener">UV-K5 wiki’s
+       reverse-engineered KiCad schematic</a>, and the Baofeng UV-5R factory schematic, whose
+       net on that contact is named <code>RXD/PTT</code> — the same K1 wiring.</p>
 
-    <p>At the microcontroller end these are pins <strong>PA07 (UART1 TX)</strong> and
-       <strong>PA08 (UART1 RX)</strong> of the DP32G030, at <strong>38400 baud, 8N1</strong>.
-       That much is certain: it matches both the
+    <p class="warn"><strong>Why the radio’s receive line is also its PTT line, and what that
+       means for you.</strong> Pressing push-to-talk shorts that contact to ground. A line a
+       switch is allowed to short to ground has to be an <em>input</em> — so it is the radio’s
+       UART receive pin, and a long low on it reads as “PTT pressed”. Two consequences:
+       the adapter’s <strong>TX</strong> is what belongs there, and your adapter
+       <strong>must idle high</strong>. A normal 3.3 V TTL adapter does. An RS-232 level
+       converter idles <em>low</em> and will hold the radio in transmit the moment you plug it
+       in — never wire one of those straight to this socket.</p>
+
+    <p class="warn"><strong>PCB v1.6 hazard.</strong> On that board revision the 2.5 mm
+       <strong>tip</strong> carries about 3.6–3.8 V DC (it does not on v1.4). Shorting it while
+       fishing around with a probe or a half-inserted plug is a genuine way to damage something.
+       Leave it alone, and seat the plugs fully.</p>
+
+    <p>These two lines are <strong>separate and dedicated</strong> — this is not a half-duplex
+       single-wire interface. Do not join TX and RX through a resistor or diode; that trick
+       belongs to other radios and breaks this one.</p>
+
+    <p>At the microcontroller they are pins <strong>PA07 (UART1 TX)</strong> and
+       <strong>PA08 (UART1 RX)</strong> of the DP32G030, <strong>38400 baud, 8N1, non-inverted,
+       idle high</strong>. The baud rate is not negotiable — the radio accepts no other. That
+       much agrees with the
        <a href="https://github.com/ludwich66/Quansheng_UV-K5_Wiki/wiki/DP32G030-MPU-PIN%E2%80%90Assignment" target="_blank" rel="noopener">wiki’s
-       pin assignment</a> and this firmware’s own <code>board.c</code>, which configures exactly
-       those two pins for UART1.</p>
+       pin assignment</a> and with this firmware’s own <code>board.c</code>.</p>
+
+    <details>
+      <summary>Where the published sources disagree, and how it was settled</summary>
+      <p class="hint">Worth knowing if you find a diagram that contradicts the table above.</p>
+      <ul class="hint">
+        <li><strong>Miklor contradicts itself</strong> on its own page: the table and the build
+            paragraph swap TX and RX. Miklor explains why — “some boards have the TxD and RxD
+            pin labels reversed” — so that paragraph is describing particular adapter
+            silkscreens, not signal direction. Trust the direction, not the silkscreen.</li>
+        <li><strong>The KiCad schematic names its nets from the adapter’s point of view</strong>
+            (“USB2SER RX”), which reads backwards if you take it as the radio’s. Tracing that
+            sheet’s wires by hand — which is how the first version of this page was written —
+            gives TX and RX the wrong way round for exactly that reason. The PTT argument above
+            is what settles it, because it does not depend on anyone’s labelling.</li>
+        <li><strong>Plug order is reported inconsistently</strong> by vendors. Identify the two
+            plugs by <em>diameter</em>, never by which is on top. Centre-to-centre spacing is
+            quoted between 11 and 12 mm — measure your radio rather than trusting a number.</li>
+        <li><strong>“5 V TTL” appears in some guides.</strong> That is a generic Kenwood
+            statement. The DP32G030 runs at 3.3 V and its manual does not publish whether
+            PA7/PA8 are among the 5 V-tolerant pins, so treat them as 3.3 V.</li>
+      </ul>
+    </details>
   </div>
 </section>
 
@@ -240,10 +262,16 @@
     <li>Hold <strong>PTT</strong> and switch it on while still holding. The torch LED glows
         white and the screen stays blank.</li>
     <li>Meter on DC volts, black probe on the ground contact you found in step 1.</li>
-    <li>Probe the other contacts. The radio’s <strong>transmit</strong> line sits at about
-        <strong>3.3&nbsp;V</strong> and twitches downward twice a second as it sends. On a
-        cheap meter that shows as a reading that will not settle — flickering somewhere
-        between roughly 3.0 and 3.3&nbsp;V rather than sitting still.</li>
+    <li>Probe the other contacts. The radio’s <strong>transmit</strong> line — the
+        <strong>2.5&nbsp;mm ring</strong>, per the table — sits at about <strong>3.3&nbsp;V</strong>
+        and twitches downward twice a second as it sends. On a cheap meter that shows as a
+        reading that will not settle: flickering somewhere between roughly 3.0 and 3.3&nbsp;V
+        rather than sitting still.</li>
+    <li>Now switch the radio off and back on <strong>normally</strong> and check the
+        <strong>3.5&nbsp;mm sleeve</strong>: it should sit steady at about 3.3&nbsp;V, because
+        it is an input idling high. <strong>If it reads near 0&nbsp;V, stop</strong> — you have
+        the wrong contact, and connecting the adapter’s transmit line to it will not work and
+        may key the radio.</li>
     <li>A contact sitting rock steady at 3.3&nbsp;V or at 0&nbsp;V is not it. A contact at
         battery voltage (7–8&nbsp;V) is a power pin — <strong>never</strong> connect the
         adapter to that one.</li>
@@ -271,12 +299,13 @@
     <pre class="log">  USB-TTL adapter                              radio
   (set to 3.3 V)
 
-     GND  ─────────────────────────────────►  ground contact
-     RX   ─────────────────────────────────►  radio TX  (the MIC-/PTT contact)
-     TX   ────────[ 1 kΩ ]──────────────────►  radio RX
+     GND  ─────────────────────────────────►  2.5 mm  sleeve
+     RX   ─────────────────────────────────►  2.5 mm  ring    (radio TX)
+     TX   ────────[ 1 kΩ ]──────────────────►  3.5 mm  sleeve  (radio RX / PTT)
 
      5V / VCC   ── not connected
-                                              speaker, MIC+, V+  ── not connected</pre>
+                                              2.5 mm tip (speaker, DC on v1.6) ── not connected
+                                              3.5 mm tip (+V), 3.5 mm ring (MIC+) ── not connected</pre>
 
     <ol class="steps">
       <li><strong>Set the adapter to 3.3&nbsp;V</strong> and confirm it with the meter before
@@ -284,6 +313,9 @@
       <li>Solder the 1&nbsp;kΩ resistor in series with the adapter’s <strong>TX</strong> line.
           It costs nothing and turns a mis-wire from “damaged radio” into “does not work”.</li>
       <li>Wire ground first, then the two data lines per the table above.</li>
+      <li>If you only own a 5 V adapter, divide its TX down: 1 kΩ in series and 2.2 kΩ from the
+          plug end to ground gives about 3.4 V. The radio’s own 3.3 V output drives a 5 V
+          adapter’s RX without help.</li>
       <li>Leave every other contact unconnected. In particular do not connect the adapter’s
           5&nbsp;V pin to anything.</li>
       <li>Insulate each joint before the next, and heatshrink the lot. The two plugs sit close
