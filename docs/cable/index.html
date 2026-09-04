@@ -8,13 +8,44 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b7285'/%3E%3Cpath d='M16 6 L16 26 M9 12 Q16 6 23 12 M11 16 Q16 12 21 16' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="../css/flasher.css">
 <style>
+	/* Six contact colours. Chosen with the categorical palette validator, not by eye:
+	   each plug's three clear the all-pairs CVD and normal-vision floors in both
+	   light and dark (worst normal ΔE 24.6, CVD 9.2), and the three signals you
+	   actually solder - ground, radio TX, radio RX - separate at normal ΔE 19.7 /
+	   CVD 13.0. Colour is never the only cue: every contact is named in the diagram
+	   and in the table, and the contacts you leave alone are hatched as well. */
+	:root {
+		--pin-rx:  #4a3aa7;   /* radio RX / PTT   3.5 mm sleeve */
+		--pin-mic: #1baf7a;   /* MIC +            3.5 mm ring   */
+		--pin-v:   #eb6834;   /* +V out           3.5 mm tip    */
+		--pin-tx:  #e87ba4;   /* radio TX         2.5 mm ring   */
+		--pin-gnd: #008300;   /* ground           2.5 mm sleeve */
+		--pin-spk: #2a78d6;   /* speaker +        2.5 mm tip    */
+	}
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) {
+			--pin-rx:  #9085e9;
+			--pin-mic: #199e70;
+			--pin-v:   #d95926;
+			--pin-tx:  #d55181;
+			--pin-gnd: #008300;
+			--pin-spk: #3987e5;
+		}
+	}
+	.sw { display: inline-block; width: 13px; height: 13px; border-radius: 3px;
+	      vertical-align: -2px; margin-right: 7px; border: 1px solid rgba(128,128,128,.45); }
+	.wired-no { opacity: .75; }
+	table.pins tbody.grp th { background: color-mix(in srgb, var(--ink) 6%, var(--card));
+	                          font-size: 0.88rem; letter-spacing: .04em; text-transform: uppercase; }
 	table.pins { width: 100%; border-collapse: collapse; font-size: 0.94rem; margin: 12px 0; }
 	table.pins th, table.pins td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
 	table.pins th { color: var(--muted); font-weight: 600; }
-	table.pins td.sig { font-weight: 700; white-space: nowrap; }
+	table.pins td.sig { font-weight: 700; }
 	.conf { font-size: 0.85rem; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
-	table.pins th:first-child, table.pins td:first-child { width: 22%; }
-	table.pins th:last-child,  table.pins td:last-child  { width: 15%; }
+	table.pins th:nth-child(1), table.pins td:nth-child(1) { width: 15%; white-space: nowrap; }
+	table.pins th:nth-child(2), table.pins td:nth-child(2) { width: 39%; }
+	table.pins th:nth-child(3), table.pins td:nth-child(3) { width: 30%; }
+	table.pins th:nth-child(4), table.pins td:nth-child(4) { width: 16%; }
 	.conf.yes  { background: var(--okbg);   color: var(--ok); }
 	.conf.meas { background: var(--warnbg); color: var(--warn); }
 	figure { margin: 16px 0; }
@@ -60,51 +91,79 @@
      does for you.</p>
 
   <figure>
-    <svg viewBox="0 0 620 210" role="img" aria-label="The two plugs of a Kenwood K1 connector with tip, ring and sleeve marked">
+    <svg viewBox="0 0 660 330" role="img"
+         aria-label="Both plugs of the Kenwood K1 connector. On the 3.5 mm plug: sleeve is the radio's receive line shared with PTT, ring is MIC positive, tip is the V out. On the 2.5 mm plug: sleeve is ground, ring is the radio's transmit line, tip is speaker positive.">
       <defs>
+        <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+          <rect width="7" height="7" fill="none"/>
+          <line x1="0" y1="0" x2="0" y2="7" stroke="#ffffff" stroke-opacity=".55" stroke-width="3"/>
+        </pattern>
         <style>
-          .body { fill: #b9c6cf; stroke: #6d7d88; stroke-width: 2; }
-          .tipf { fill: #0b7285; }
-          .ringf{ fill: #e8a33d; }
-          .slvf { fill: #56636c; }
-          .lbl  { font: 13px system-ui, sans-serif; fill: #16212b; }
-          .lbl2 { font: 11px system-ui, sans-serif; fill: #5a6b78; }
-          .ins  { fill: #2b3740; }
+          .shell { fill: #b9c6cf; stroke: #6d7d88; stroke-width: 2; }
+          .ins   { fill: #2b3740; }
+          .ttl   { font: 600 14px system-ui, sans-serif; fill: var(--ink); }
+          .cap   { font: 12px system-ui, sans-serif; fill: var(--ink); }
+          .sub   { font: 11px system-ui, sans-serif; fill: var(--muted); }
+          .lead  { stroke: var(--muted); stroke-width: 1.5; opacity: .65; }
         </style>
       </defs>
 
-      <!-- 3.5 mm plug -->
-      <text class="lbl" x="10" y="26">3.5 mm plug (the larger one)</text>
-      <rect class="body" x="10" y="40" width="150" height="34" rx="6"/>
-      <rect class="slvf" x="160" y="44" width="88"  height="26"/>
-      <rect class="ins"  x="248" y="44" width="7"   height="26"/>
-      <rect class="ringf" x="255" y="44" width="52" height="26"/>
-      <rect class="ins"  x="307" y="44" width="7"   height="26"/>
-      <path class="tipf" d="M314 44 h44 a13 13 0 0 1 0 26 h-44 z"/>
-      <text class="lbl2" x="185" y="90">sleeve</text>
-      <text class="lbl2" x="262" y="90">ring</text>
-      <text class="lbl2" x="322" y="90">tip</text>
+      <!-- ── 3.5 mm plug ───────────────────────────────────────────────── -->
+      <text class="ttl" x="8" y="22">3.5 mm plug — the larger one</text>
 
-      <!-- 2.5 mm plug -->
-      <text class="lbl" x="10" y="132">2.5 mm plug (the smaller one)</text>
-      <rect class="body" x="10" y="146" width="150" height="28" rx="6"/>
-      <rect class="slvf" x="160" y="150" width="70"  height="20"/>
-      <rect class="ins"  x="230" y="150" width="6"   height="20"/>
-      <rect class="ringf" x="236" y="150" width="40" height="20"/>
-      <rect class="ins"  x="276" y="150" width="6"   height="20"/>
-      <path class="tipf" d="M282 150 h34 a10 10 0 0 1 0 20 h-34 z"/>
-      <text class="lbl2" x="178" y="190">sleeve</text>
-      <text class="lbl2" x="240" y="190">ring</text>
-      <text class="lbl2" x="288" y="190">tip</text>
+      <rect class="shell" x="8" y="34" width="120" height="36" rx="6"/>
+      <!-- sleeve = radio RX -->
+      <rect x="128" y="38" width="96" height="28" fill="var(--pin-rx)"/>
+      <rect x="228" y="38" width="7"  height="28" class="ins"/>
+      <!-- ring = MIC+ (not connected) -->
+      <rect x="235" y="38" width="54" height="28" fill="var(--pin-mic)"/>
+      <rect x="235" y="38" width="54" height="28" fill="url(#hatch)"/>
+      <rect x="289" y="38" width="7"  height="28" class="ins"/>
+      <!-- tip = +V (not connected) -->
+      <path d="M296 38 h46 a14 14 0 0 1 0 28 h-46 z" fill="var(--pin-v)"/>
+      <path d="M296 38 h46 a14 14 0 0 1 0 28 h-46 z" fill="url(#hatch)"/>
 
-      <text class="lbl2" x="400" y="60">Tip = the very end.</text>
-      <text class="lbl2" x="400" y="80">Ring = the middle band.</text>
-      <text class="lbl2" x="400" y="100">Sleeve = the long section</text>
-      <text class="lbl2" x="400" y="118">nearest the cable.</text>
-      <text class="lbl2" x="400" y="150">A two-conductor plug has</text>
-      <text class="lbl2" x="400" y="168">no ring: tip and sleeve only.</text>
+      <line class="lead" x1="176" y1="70" x2="176" y2="84"/>
+      <line class="lead" x1="262" y1="70" x2="262" y2="104"/>
+      <line class="lead" x1="319" y1="70" x2="319" y2="124"/>
+      <text class="cap" x="176" y="97"  text-anchor="middle">sleeve — <tspan font-weight="700">radio RX</tspan></text>
+      <text class="sub" x="176" y="111" text-anchor="middle">wire the adapter’s TX here (also PTT)</text>
+      <text class="cap" x="262" y="131" text-anchor="middle">ring — MIC +</text>
+      <text class="cap" x="319" y="151" text-anchor="middle">tip — +V out</text>
+      <text class="sub" x="440" y="131">hatched = leave unconnected</text>
+
+      <!-- ── 2.5 mm plug ───────────────────────────────────────────────── -->
+      <text class="ttl" x="8" y="197">2.5 mm plug — the smaller one</text>
+
+      <rect class="shell" x="8" y="209" width="120" height="30" rx="6"/>
+      <!-- sleeve = GND -->
+      <rect x="128" y="212" width="78" height="24" fill="var(--pin-gnd)"/>
+      <rect x="210" y="212" width="6"  height="24" class="ins"/>
+      <!-- ring = radio TX -->
+      <rect x="216" y="212" width="44" height="24" fill="var(--pin-tx)"/>
+      <rect x="264" y="212" width="6"  height="24" class="ins"/>
+      <!-- tip = speaker+ (not connected) -->
+      <path d="M270 212 h36 a12 12 0 0 1 0 24 h-36 z" fill="var(--pin-spk)"/>
+      <path d="M270 212 h36 a12 12 0 0 1 0 24 h-36 z" fill="url(#hatch)"/>
+
+      <line class="lead" x1="167" y1="236" x2="167" y2="250"/>
+      <line class="lead" x1="238" y1="236" x2="238" y2="270"/>
+      <line class="lead" x1="288" y1="236" x2="288" y2="290"/>
+      <text class="cap" x="167" y="263" text-anchor="middle">sleeve — <tspan font-weight="700">ground</tspan></text>
+      <text class="cap" x="238" y="283" text-anchor="middle">ring — <tspan font-weight="700">radio TX</tspan></text>
+      <text class="sub" x="238" y="297" text-anchor="middle">wire the adapter’s RX here</text>
+      <text class="cap" x="288" y="310" text-anchor="middle">tip — speaker +</text>
+
+      <!-- key -->
+      <text class="sub" x="440" y="34">Tip = the very end.</text>
+      <text class="sub" x="440" y="52">Ring = the middle band.</text>
+      <text class="sub" x="440" y="70">Sleeve = the long section</text>
+      <text class="sub" x="440" y="86">nearest the cable.</text>
+      <text class="sub" x="440" y="212">Both plugs are three-conductor;</text>
+      <text class="sub" x="440" y="230">only three contacts get a wire.</text>
     </svg>
-    <figcaption>Tip, ring and sleeve, the names used throughout this page.</figcaption>
+    <figcaption>Each contact has its own colour, carried through to the table below. The three
+       hatched contacts are left unconnected.</figcaption>
   </figure>
 </section>
 
@@ -117,42 +176,50 @@
        two-conductor.</p>
 
     <table class="pins">
-      <thead><tr><th>Signal</th><th>Plug</th><th>Conductor</th><th>Wire it to</th><th>Certainty</th></tr></thead>
-      <tbody>
+      <thead><tr><th>Contact</th><th>Signal</th><th>Wire it to</th><th>Certainty</th></tr></thead>
+
+      <tbody class="grp">
+        <tr><th colspan="4">3.5 mm plug — the larger one</th></tr>
         <tr>
-          <td class="sig">Radio RX<br><span class="muted">(PC → radio)</span></td>
-          <td>3.5 mm</td>
-          <td><strong>Sleeve</strong><br><span class="muted">shared with MIC− and external PTT</span></td>
+          <td><span class="sw" style="background:var(--pin-rx)"></span><strong>Sleeve</strong></td>
+          <td class="sig">Radio RX <span class="muted">(PC → radio)</span><br>
+              <span class="muted">shared with MIC− and external PTT</span></td>
           <td>adapter <strong>TX</strong>, through the 1 kΩ resistor</td>
           <td><span class="conf yes">4 sources</span></td>
         </tr>
-        <tr>
-          <td class="sig">Radio TX<br><span class="muted">(radio → PC)</span></td>
-          <td>2.5 mm</td>
-          <td><strong>Ring</strong></td>
-          <td>adapter <strong>RX</strong></td>
-          <td><span class="conf yes">3 sources</span></td>
+        <tr class="wired-no">
+          <td><span class="sw" style="background:var(--pin-mic)"></span>Ring</td>
+          <td class="sig">MIC +</td>
+          <td>nothing</td>
+          <td><span class="conf yes">2 sources</span></td>
         </tr>
+        <tr class="wired-no">
+          <td><span class="sw" style="background:var(--pin-v)"></span>Tip</td>
+          <td class="sig">+V out</td>
+          <td>nothing — never connect this</td>
+          <td><span class="conf yes">2 sources</span></td>
+        </tr>
+      </tbody>
+
+      <tbody class="grp">
+        <tr><th colspan="4">2.5 mm plug — the smaller one</th></tr>
         <tr>
+          <td><span class="sw" style="background:var(--pin-gnd)"></span><strong>Sleeve</strong></td>
           <td class="sig">Ground</td>
-          <td>2.5 mm</td>
-          <td><strong>Sleeve</strong></td>
           <td>adapter <strong>GND</strong></td>
           <td><span class="conf yes">3 sources</span></td>
         </tr>
         <tr>
-          <td class="sig">Speaker +</td><td>2.5 mm</td><td>Tip</td>
-          <td>nothing — <strong>and see the warning below</strong></td>
+          <td><span class="sw" style="background:var(--pin-tx)"></span><strong>Ring</strong></td>
+          <td class="sig">Radio TX <span class="muted">(radio → PC)</span></td>
+          <td>adapter <strong>RX</strong></td>
           <td><span class="conf yes">3 sources</span></td>
         </tr>
-        <tr>
-          <td class="sig">MIC +</td><td>3.5 mm</td><td>Ring</td><td>nothing</td>
-          <td><span class="conf yes">2 sources</span></td>
-        </tr>
-        <tr>
-          <td class="sig">+V out</td><td>3.5 mm</td><td>Tip</td>
-          <td>nothing — never connect this</td>
-          <td><span class="conf yes">2 sources</span></td>
+        <tr class="wired-no">
+          <td><span class="sw" style="background:var(--pin-spk)"></span>Tip</td>
+          <td class="sig">Speaker +</td>
+          <td>nothing — <strong>and see the warning below</strong></td>
+          <td><span class="conf yes">3 sources</span></td>
         </tr>
       </tbody>
     </table>
@@ -263,12 +330,12 @@
         white and the screen stays blank.</li>
     <li>Meter on DC volts, black probe on the ground contact you found in step 1.</li>
     <li>Probe the other contacts. The radio’s <strong>transmit</strong> line — the
-        <strong>2.5&nbsp;mm ring</strong>, per the table — sits at about <strong>3.3&nbsp;V</strong>
+<span class="sw" style="background:var(--pin-tx)"></span><strong>2.5&nbsp;mm ring</strong>, per the table — sits at about <strong>3.3&nbsp;V</strong>
         and twitches downward twice a second as it sends. On a cheap meter that shows as a
         reading that will not settle: flickering somewhere between roughly 3.0 and 3.3&nbsp;V
         rather than sitting still.</li>
     <li>Now switch the radio off and back on <strong>normally</strong> and check the
-        <strong>3.5&nbsp;mm sleeve</strong>: it should sit steady at about 3.3&nbsp;V, because
+<span class="sw" style="background:var(--pin-rx)"></span><strong>3.5&nbsp;mm sleeve</strong>: it should sit steady at about 3.3&nbsp;V, because
         it is an input idling high. <strong>If it reads near 0&nbsp;V, stop</strong> — you have
         the wrong contact, and connecting the adapter’s transmit line to it will not work and
         may key the radio.</li>
@@ -299,13 +366,13 @@
     <pre class="log">  USB-TTL adapter                              radio
   (set to 3.3 V)
 
-     GND  ─────────────────────────────────►  2.5 mm  sleeve
-     RX   ─────────────────────────────────►  2.5 mm  ring    (radio TX)
-     TX   ────────[ 1 kΩ ]──────────────────►  3.5 mm  sleeve  (radio RX / PTT)
+     GND  ─────────────────────────────────►  <span style="color:var(--pin-gnd);font-weight:700">2.5 mm  sleeve</span>   ground
+     RX   ─────────────────────────────────►  <span style="color:var(--pin-tx);font-weight:700">2.5 mm  ring</span>     radio TX
+     TX   ────────[ 1 kΩ ]──────────────────►  <span style="color:var(--pin-rx);font-weight:700">3.5 mm  sleeve</span>   radio RX / PTT
 
      5V / VCC   ── not connected
-                                              2.5 mm tip (speaker, DC on v1.6) ── not connected
-                                              3.5 mm tip (+V), 3.5 mm ring (MIC+) ── not connected</pre>
+                                              <span style="color:var(--pin-spk)">2.5 mm tip</span> (speaker, DC on v1.6) ── not connected
+                                              <span style="color:var(--pin-v)">3.5 mm tip</span> (+V), <span style="color:var(--pin-mic)">3.5 mm ring</span> (MIC+) ── not connected</pre>
 
     <ol class="steps">
       <li><strong>Set the adapter to 3.3&nbsp;V</strong> and confirm it with the meter before
