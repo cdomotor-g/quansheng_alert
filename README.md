@@ -177,7 +177,9 @@ anything it cannot verify first.
 > only way in. Many kits include one alongside the charging cable, so check the box
 > before buying; if you do buy one, prefer a **CH340** cable, because the cheap
 > "PL2303" ones are frequently counterfeit chips that current Windows drivers refuse
-> to run.
+> to run. If you would rather build one, the pinout and a measure-first procedure are in
+> [docs/cable/](docs/cable/index.html) (published at
+> [/cable/](https://cdomotor-g.github.io/quansheng_alert/cable/)).
 
 **Nothing here can permanently damage the radio.** The bootloader lives in a separate
 part of the chip that is never written, so an interrupted flash leaves the radio in
