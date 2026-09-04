@@ -129,9 +129,88 @@ make -C test                                            # host unit tests (plain
 
 `make` prints the size; the flash limit is 61,440 bytes and the default build sits a
 few hundred bytes under it, so if you enable more egzumer features you will have to
-give something up (usually a smaller station table, see below). Flash
-`firmware.packed.bin` with the [web flasher](https://egzumer.github.io/uvtools/)
-(radio in bootloader mode: hold PTT while switching on) or `k5prog -F -b firmware.bin`.
+give something up (usually a smaller station table, see below).
+
+## Flashing the handheld
+
+You need: the radio, the **Kenwood-style two-pin USB programming cable** (the same
+one CHIRP uses — a "K1" plug: 2.5 mm + 3.5 mm jacks into the side socket under the
+rubber flap, USB at the other end, usually a CH340 or PL2303 chip), and a laptop with
+**Chrome or Edge** (the web flasher uses Web Serial, which Firefox and Safari do not
+have). The whole thing takes about a minute; the radio can be flashed as many times
+as you like and cannot be "bricked" by a bad image because the bootloader is in a
+separate, protected part of the chip — if a flash goes wrong, just do it again.
+
+### 1. Get the firmware file
+
+Either build it (`make` above → `firmware.packed.bin`), or download it from GitHub:
+
+* **Actions → build → the latest green run → Artifacts** — `quansheng-alert-default-…`
+  or `quansheng-alert-constitution-hill-…` (South-East Queensland station table).
+  Unzip it; you want the file ending in **`.packed.bin`** (the plain `.bin` is for
+  `k5prog` only).
+* or **Releases** (created when a `v*` tag is pushed) — the `.packed.bin` is attached.
+
+### 2. Back up the radio first (once)
+
+Still on stock or egzumer firmware, plug the cable in, switch the radio on normally,
+open <https://egzumer.github.io/uvtools/>, go to **EEPROM → Backup** (called
+*Calibration / EEPROM backup* in some versions), **Connect**, pick the cable's COM
+port, and save the file it offers. That file holds the radio's calibration
+(squelch tables, TX power, battery); the firmware never writes to those areas, but
+having the backup means any experiment is reversible.
+
+### 3. Put the radio into bootloader mode
+
+1. Switch the radio **off**.
+2. Plug the programming cable into the radio and the laptop.
+3. **Hold PTT** and, still holding it, turn the volume knob to switch the radio
+   **on**. The torch LED comes on **white/steady** and the screen stays blank (or
+   shows a bootloader version on some units). Let go of PTT.
+
+If the LED does not come on, the radio booted normally — switch off and try again,
+pressing PTT before turning the knob.
+
+### 4. Flash
+
+1. Open <https://egzumer.github.io/uvtools/> in Chrome/Edge and choose
+   **Firmware flasher**.
+2. **Choose file** → select the `.packed.bin` from step 1.
+3. **Connect** → pick the cable's serial port from the browser pop-up
+   (on Windows it is "USB-SERIAL CH340 (COMx)"; if nothing is listed, install the
+   [CH340 driver](https://www.wch-ic.com/downloads/CH341SER_EXE.html) and re-plug).
+4. **Flash**. A progress bar runs for 10–20 s and the page says *done*.
+5. Switch the radio off and on. The boot screen shows the build tag (`ALERTRX` and
+   the git hash). Your channels and settings are untouched — only the firmware is
+   replaced.
+
+Command-line alternative (Linux/macOS), with the radio in bootloader mode:
+
+```sh
+git clone https://github.com/sq5bpf/k5prog && make -C k5prog
+k5prog/k5prog -F -YYY -b firmware.bin           # note: the plain .bin, not .packed.bin
+```
+
+### 5. First-time settings
+
+* Menu **Voice** → English (needed for the spoken readings).
+* Menu **Sql** → start at 0.0 and raise it until the static just stops.
+* Optionally menu **F1Long** (or F2Long / M Long) → `ALERT RX`, so one long press of
+  the side button opens the receiver; F then 0 always works too.
+* Tune VFO A to **151.500** FM (narrow), then F 0.
+
+### Going back
+
+Flash any other `.packed.bin` (stock Quansheng 2.01.xx, egzumer, …) the same way.
+The fine-squelch and ALERT settings live in an EEPROM block no other firmware uses,
+so they are ignored, not harmful, and come back when this firmware is reflashed.
+
+### Which radio is it?
+
+This build is for the original **DP32G030 + BK4819** hardware: UV-K5, UV-K5(8), UV-K6,
+UV-5R Plus — the one in the photo with the `M`/`A` … `EXIT`/`D` keypad. The newer
+**UV-K5 "V3" / UV-K1** use a different MCU (PY32F071) and need a different firmware
+line; the web flasher refuses the image on those, nothing is damaged.
 
 GitHub Actions (`.github/workflows/build.yml`) builds on every push, weekly, and on
 demand; the packed firmware is an artifact of every run and a release asset for
