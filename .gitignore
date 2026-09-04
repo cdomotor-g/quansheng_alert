@@ -1,0 +1,16 @@
+*.d
+*.o
+firmware
+/firmware.packed.bin
+/firmware.bin
+/compiled-firmware
+.cache
+compile_commands.json
+.vscode
+
+k5_eeprom.raw
+
+# quansheng_alert
+/test/test_alert_decode
+/test/test_alert_stations
+__pycache__/

@@ -1,0 +1,93 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+  # Weekly, so a MegaNet station-data change lands in the firmware without anyone asking.
+  schedule:
+    - cron: '0 20 * * 0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The default: stations.filter (Mt Kanigan + friends), full feature set.
+          - variant: default
+            filter: stations.filter
+            max_bytes: 6400
+            make_flags: ""
+          # South East Queensland: Constitution Hill needs ~6.8 KB of table, so the
+          # flashlight and the RSSI bar are switched off to make room.
+          - variant: constitution-hill
+            filter: filters/constitution-hill.filter
+            max_bytes: 7000
+            make_flags: "ENABLE_FLASHLIGHT=0 ENABLE_RSSI_BAR=0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi python3-crcmod
+
+      # No --meganet-dir: the generator fetches cdomotor-g/MegaNet@main over the network.
+      # The header committed in this repo is the copy the build normally uses; this step
+      # refreshes it so a MegaNet change is picked up.
+      - name: Regenerate station table from MegaNet
+        run: python3 tools/gen_stations.py --filter ${{ matrix.filter }} --max-bytes ${{ matrix.max_bytes }}
+
+      - name: Host tests
+        run: make -C test
+
+      - name: Build
+        run: make -j ${{ matrix.make_flags }}
+
+      - name: Size
+        run: arm-none-eabi-size firmware
+
+      - name: Name the artefacts
+        run: |
+          cp firmware.packed.bin quansheng-alert-${{ matrix.variant }}.packed.bin
+          cp firmware.bin        quansheng-alert-${{ matrix.variant }}.bin
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: quansheng-alert-${{ matrix.variant }}-${{ github.sha }}
+          path: |
+            quansheng-alert-${{ matrix.variant }}.packed.bin
+            quansheng-alert-${{ matrix.variant }}.bin
+          if-no-files-found: error
+
+      - name: Commit regenerated station table
+        if: >-
+          matrix.variant == 'default' &&
+          github.ref == 'refs/heads/main' &&
+          (github.event_name == 'push' || github.event_name == 'schedule')
+        run: |
+          if [ -z "$(git status --porcelain -- app/alert_stations_gen.h)" ]; then
+            echo "app/alert_stations_gen.h is unchanged."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/alert_stations_gen.h
+          git commit -m "Regenerate station table from MegaNet"
+          git push origin HEAD:main
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: quansheng-alert-${{ matrix.variant }}.packed.bin
+          fail_on_unmatched_files: true
