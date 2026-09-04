@@ -39,10 +39,14 @@ jobs:
       # The default build: stations.filter, full feature set. No --meganet-dir,
       # so the generator fetches cdomotor-g/MegaNet@main over the network and a
       # change there shows up as a diff in the committed header.
+      #
+      # VERSION_STRING is a hash of the sources rather than the git commit, so a
+      # push that only touches documentation or CI rebuilds to a byte-identical
+      # image and does not churn the binaries committed for the installer.
       - name: Build the default variant
         run: |
           python3 tools/gen_stations.py
-          make -j
+          make -j VERSION_STRING="$(tools/srcid.sh)"
           arm-none-eabi-size firmware
           python3 tools/publish_firmware.py \
             --variant default \
@@ -55,7 +59,7 @@ jobs:
       - name: Build the South-East Queensland variant
         run: |
           python3 tools/gen_stations.py --filter filters/constitution-hill.filter --max-bytes 7000
-          make clean && make -j ENABLE_FLASHLIGHT=0 ENABLE_RSSI_BAR=0
+          make clean && make -j ENABLE_FLASHLIGHT=0 ENABLE_RSSI_BAR=0 VERSION_STRING="$(tools/srcid.sh)"
           arm-none-eabi-size firmware
           python3 tools/publish_firmware.py \
             --variant constitution-hill \
@@ -68,7 +72,7 @@ jobs:
       - name: Restore the default station table
         run: |
           python3 tools/gen_stations.py
-          make clean && make -j
+          make clean && make -j VERSION_STRING="$(tools/srcid.sh)"
 
       - name: Host tests
         run: |
@@ -93,8 +97,12 @@ jobs:
           github.ref == 'refs/heads/main' &&
           (github.event_name == 'push' || github.event_name == 'schedule')
         run: |
-          if [ -z "$(git status --porcelain -- docs/firmware app/alert_stations_gen.h)" ]; then
-            echo "Nothing changed."
+          # manifest.json carries a build timestamp, so it always differs. Only
+          # commit when the firmware or the station table actually changed;
+          # otherwise throw the timestamp away and leave main alone.
+          if [ -z "$(git status --porcelain -- 'docs/firmware/*.bin' app/alert_stations_gen.h)" ]; then
+            echo "Firmware unchanged - nothing to publish."
+            git checkout -- docs/firmware/manifest.json || true
             exit 0
           fi
           git config user.name  "github-actions[bot]"

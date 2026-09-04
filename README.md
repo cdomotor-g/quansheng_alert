@@ -136,6 +136,13 @@ make -C test                                            # host unit tests (plain
 few hundred bytes under it, so if you enable more egzumer features you will have to
 give something up (usually a smaller station table, see below).
 
+The boot screen shows `ALERTRX` and a seven-character build id. Locally that is the
+git commit; the published builds instead use `tools/srcid.sh`, a hash of everything
+the firmware is compiled from. That makes a build reproducible — the same sources
+always give a byte-identical image — so editing documentation does not silently
+produce a "new" firmware, and the id on your radio identifies the code it is running
+rather than whichever commit happened to trigger the build.
+
 GitHub Actions (`.github/workflows/build.yml`) builds both variants on every push,
 weekly and on demand, runs every test, and publishes the results into
 `docs/firmware/` so the web installer always offers a current build. The weekly run
