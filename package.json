@@ -1,0 +1,11 @@
+{
+  "name": "quansheng-alert-installer-tests",
+  "private": true,
+  "description": "Host-side tests for the web installer in docs/. The firmware itself is built with make.",
+  "scripts": {
+    "test": "node test/test_k5protocol.mjs && node test/test_installer.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.1"
+  }
+}

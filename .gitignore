@@ -1,6 +1,6 @@
 *.d
 *.o
-firmware
+/firmware
 /firmware.packed.bin
 /firmware.bin
 /compiled-firmware
@@ -14,3 +14,7 @@ k5_eeprom.raw
 /test/test_alert_decode
 /test/test_alert_stations
 __pycache__/
+
+# node (installer tests only)
+node_modules/
+package-lock.json

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ALERT RX firmware installer — Quansheng UV-K5</title>
+<meta name="description" content="One-click installer for the quansheng_alert ALERT telemetry receiver firmware. Backs your radio up first, then flashes it. Nothing to download.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b7285'/%3E%3Cpath d='M16 6 L16 26 M9 12 Q16 6 23 12 M11 16 Q16 12 21 16' stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/flasher.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <h1>ALERT RX firmware installer</h1>
+    <p class="lede">Installs the flood-warning telemetry receiver firmware onto a Quansheng UV-K5.
+       It backs up your radio first, then does the rest itself — there is nothing to download,
+       unzip or compile.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ───────────────────────────── browser check ───────────────────────────── -->
+<section id="unsupported" class="card blocker" hidden>
+  <h2>This browser can’t talk to the radio</h2>
+  <p>Flashing needs <strong>Web Serial</strong>, which only Chrome, Edge and other
+     Chromium browsers have, and only on a <strong>desktop or laptop</strong>
+     (Windows, macOS, Linux or ChromeOS).</p>
+  <p id="unsupported-why" class="muted"></p>
+  <p>Open this same page in Chrome or Edge on a computer and you’re away.</p>
+</section>
+
+<div id="wizard">
+
+<!-- ───────────────────────────── step 1: firmware ────────────────────────── -->
+<section class="card step" id="step-fw" data-step="1">
+  <h2><span class="num">1</span> Pick the firmware</h2>
+  <p class="hint">Both builds are the same program. They differ only in which
+     region’s station names are stored in the radio, because there is only room
+     for about 6&nbsp;KB of names. Addresses outside the list still decode — you
+     just see the number instead of the name.</p>
+
+  <div id="fw-cards" class="cards">
+    <p class="muted" id="fw-loading">Loading the firmware list…</p>
+  </div>
+
+  <details class="advanced">
+    <summary>Use my own firmware file instead</summary>
+    <p class="hint">For flashing a build you made yourself, or going back to stock
+       Quansheng / egzumer firmware. Both <code>.packed.bin</code> and raw
+       <code>.bin</code> files work; the file is checked before anything is sent
+       to the radio.</p>
+    <input type="file" id="fw-file" accept=".bin">
+    <p id="fw-file-status" class="muted"></p>
+  </details>
+
+  <p class="chosen" id="fw-chosen" hidden></p>
+</section>
+
+<!-- ───────────────────────────── step 2: connect ─────────────────────────── -->
+<section class="card step locked" id="step-connect" data-step="2">
+  <h2><span class="num">2</span> Plug in and connect</h2>
+  <ol class="steps">
+    <li>Plug the <strong>programming cable</strong> into the radio’s side socket
+        (under the rubber flap) and into a USB port. Push the two plugs in firmly —
+        a half-seated plug is the most common reason this fails.</li>
+    <li>Switch the radio on <strong>normally</strong> (just turn the volume knob).
+        Leave it on a normal channel screen.</li>
+    <li>Press <em>Connect</em> and choose the cable from the list your browser shows.
+        It is usually called <em>USB-SERIAL CH340</em>, <em>USB Serial</em> or
+        <em>Prolific</em>.</li>
+  </ol>
+  <div class="row">
+    <button id="btn-connect" class="primary">Connect to my radio</button>
+    <button id="btn-disconnect" class="ghost" hidden>Disconnect</button>
+  </div>
+  <p id="connect-status" class="status"></p>
+  <details class="advanced">
+    <summary>The list is empty, or the radio isn’t answering</summary>
+    <ul class="hint">
+      <li><strong>Nothing in the list:</strong> the cable’s driver isn’t installed.
+          Most cables use a CH340 chip —
+          <a href="https://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener">install the CH340 driver</a>,
+          unplug and re-plug the cable, then try again.</li>
+      <li><strong>Port appears but the radio doesn’t answer:</strong> push both plugs
+          in harder, make sure the radio is switched on, and close any other program
+          that might hold the port open (CHIRP, a serial terminal).</li>
+      <li>Some cables are wired for a different radio family. If yours has never
+          worked with CHIRP either, that is the likely cause.</li>
+    </ul>
+  </details>
+</section>
+
+<!-- ───────────────────────────── step 3: backup ──────────────────────────── -->
+<section class="card step locked" id="step-backup" data-step="3">
+  <h2><span class="num">3</span> Back up your radio</h2>
+  <p class="hint">This saves your radio’s <strong>EEPROM</strong>: the factory
+     calibration, every channel, and all your settings. That is the part which is
+     unique to your radio and can’t be downloaded from anywhere — so we take a copy
+     before changing anything. It takes about ten seconds and doesn’t alter the radio.</p>
+  <p class="hint note"><strong>Worth knowing:</strong> the firmware itself can’t be read
+     out of the radio — the bootloader has no “read” command, so no tool can do it.
+     That’s not a problem: firmware is replaceable in a minute from this page or from
+     stock images, whereas your calibration is not. The backup below is the one that matters.</p>
+
+  <div class="row">
+    <button id="btn-backup" class="primary">Back up my radio</button>
+    <label class="check"><input type="checkbox" id="skip-backup"> I already have a backup, skip this</label>
+  </div>
+  <div class="progress" id="backup-progress" hidden><div class="bar"></div></div>
+  <p id="backup-status" class="status"></p>
+</section>
+
+<!-- ───────────────────────────── step 4: flash ───────────────────────────── -->
+<section class="card step locked" id="step-flash" data-step="4">
+  <h2><span class="num">4</span> Install the firmware</h2>
+  <p class="hint">Now put the radio into <strong>bootloader mode</strong>. Leave the
+     cable plugged in the whole time — the radio can be switched off and on without
+     the computer losing the connection.</p>
+  <ol class="steps">
+    <li>Switch the radio <strong>off</strong>.</li>
+    <li><strong>Hold the PTT button</strong> (the big one on the side) and, while
+        holding it, switch the radio <strong>on</strong> with the volume knob.</li>
+    <li>The <strong>torch LED at the top glows white</strong> and the screen stays
+        blank. That’s bootloader mode. Let go of PTT.</li>
+  </ol>
+  <div class="row">
+    <button id="btn-flash" class="primary">Install firmware now</button>
+  </div>
+  <div class="progress" id="flash-progress" hidden><div class="bar"></div></div>
+  <p id="flash-status" class="status"></p>
+  <p class="hint">Nothing here can permanently damage the radio. The bootloader lives
+     in a separate part of the chip that is never written, so if a flash is interrupted
+     the radio still starts in bootloader mode and you simply do it again.</p>
+</section>
+
+<!-- ───────────────────────────── step 5: done ────────────────────────────── -->
+<section class="card step locked" id="step-done" data-step="5">
+  <h2><span class="num">✓</span> Done</h2>
+  <p id="done-summary" class="status ok"></p>
+  <h3>Set it up, once</h3>
+  <ol class="steps">
+    <li><strong>Menu → Voice → English</strong>, so it reads the readings out.</li>
+    <li><strong>Menu → Sql</strong>: start at <code>0.0</code> and raise it in tenths
+        until the static just goes quiet.</li>
+    <li>Tune to <strong>151.500 MHz</strong>, FM.</li>
+    <li>Press <strong>F</strong> then <strong>0</strong> to open the ALERT receiver.</li>
+  </ol>
+  <p>The full guide, including what every setting does and how to run the first
+     on-air test, is in the
+     <a href="https://github.com/cdomotor-g/quansheng_alert#readme" target="_blank" rel="noopener">project README</a>.</p>
+  <div class="row">
+    <button id="btn-restart" class="ghost">Flash another radio</button>
+  </div>
+</section>
+
+</div><!-- /wizard -->
+
+<!-- ───────────────────────────── advanced ────────────────────────────────── -->
+<section class="card" id="toolbox">
+  <h2>Toolbox</h2>
+
+  <details>
+    <summary>What is my radio running?</summary>
+    <p class="hint">Asks a radio that is switched on normally which firmware it has.
+       Connect first (step 2).</p>
+    <div class="row"><button id="btn-identify" class="ghost">Ask the radio</button></div>
+    <p id="identify-status" class="status"></p>
+  </details>
+
+  <details>
+    <summary>Restore a backup onto the radio</summary>
+    <p class="hint">Writes a previously saved EEPROM backup back into the radio:
+       calibration, channels and settings. The radio must be switched on
+       <strong>normally</strong> (not bootloader mode) and connected.</p>
+    <p class="warn">Only ever restore a backup taken from <em>this</em> radio.
+       Another radio’s calibration will make yours transmit and receive off-frequency.</p>
+    <input type="file" id="restore-file" accept=".bin">
+    <div class="row">
+      <button id="btn-restore" class="danger" disabled>Write this backup to the radio</button>
+    </div>
+    <div class="progress" id="restore-progress" hidden><div class="bar"></div></div>
+    <p id="restore-status" class="status"></p>
+  </details>
+
+  <details id="history-wrap">
+    <summary>Backups and installs on this computer</summary>
+    <p class="hint">This page keeps a copy of your last few backups in the browser,
+       as a safety net in case the downloaded file goes missing. They never leave
+       your machine.</p>
+    <div id="history"></div>
+  </details>
+
+  <details>
+    <summary>Activity log</summary>
+    <p class="hint">If something goes wrong, copy this and paste it into a bug report.</p>
+    <pre id="log" class="log"></pre>
+    <div class="row"><button id="btn-copylog" class="ghost">Copy log</button></div>
+  </details>
+</section>
+
+<footer class="foot">
+  <p>Everything happens in your browser: the radio is talked to directly over USB and
+     nothing is uploaded anywhere.
+     Part of <a href="https://github.com/cdomotor-g/quansheng_alert" target="_blank" rel="noopener">cdomotor-g/quansheng_alert</a>.
+     The serial protocol was originally worked out by
+     <a href="https://github.com/sq5bpf/k5prog" target="_blank" rel="noopener">k5prog</a> and
+     <a href="https://github.com/whosmatt/uvmod" target="_blank" rel="noopener">uvmod</a>/<a href="https://github.com/egzumer/uvtools" target="_blank" rel="noopener">uvtools</a>.</p>
+</footer>
+
+</main>
+
+<script src="js/k5protocol.js"></script>
+<script src="js/k5radio.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "generated": "2026-09-04 04:34 UTC",
+  "commit": "02f24b1",
+  "builds": [
+    {
+      "id": "default",
+      "title": "Default \u2014 Mt Kanigan and neighbours",
+      "description": "Wide Bay / Burnett and central Queensland: Mt Kanigan, Mt Glorious, Barcaldine.",
+      "file": "firmware/quansheng-alert-default.packed.bin",
+      "raw_file": "firmware/quansheng-alert-default.bin",
+      "size": 61018,
+      "raw_size": 61000,
+      "sha256": "c2f71a543b109de77801b99bf6b5bf41815fcf4956fa72118ade5d829d6f22a4",
+      "stations": 379,
+      "addresses": 849,
+      "commit": "02f24b1",
+      "built": "2026-09-04",
+      "order": 10
+    },
+    {
+      "id": "constitution-hill",
+      "title": "South-East Queensland",
+      "description": "The Constitution Hill network: Brisbane, Ipswich, Logan, Gold and Sunshine Coasts.",
+      "file": "firmware/quansheng-alert-constitution-hill.packed.bin",
+      "raw_file": "firmware/quansheng-alert-constitution-hill.bin",
+      "size": 60978,
+      "raw_size": 60960,
+      "sha256": "bd4ed6f7934add439b5310fce0fd6c748a4ad5e584ac051546719b7b4dc4c7c0",
+      "stations": 403,
+      "addresses": 922,
+      "commit": "02f24b1",
+      "built": "2026-09-04",
+      "order": 20
+    }
+  ]
+}

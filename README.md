@@ -16,6 +16,11 @@ It also replaces the stock 0–9 squelch with a **fine 0.0–9.0 squelch** with
 user-settable open/close delays, so weak data bursts open the squelch quickly and
 the no-signal noise floor can be muted without muting the signals.
 
+### → [Install it on your radio](https://cdomotor-g.github.io/quansheng_alert/)
+
+One page in Chrome or Edge, four steps, nothing to download or compile. It backs your
+radio up before it changes anything. See [Installing it on the radio](#installing-it-on-the-radio).
+
 The base is [egzumer/uv-k5-firmware-custom](https://github.com/egzumer/uv-k5-firmware-custom)
 (Apache-2.0, see `LICENSE.egzumer`; its original README is in
 `docs/README-egzumer-upstream.md`). Everything egzumer offers is still here except
@@ -131,92 +136,120 @@ make -C test                                            # host unit tests (plain
 few hundred bytes under it, so if you enable more egzumer features you will have to
 give something up (usually a smaller station table, see below).
 
-## Flashing the handheld
+GitHub Actions (`.github/workflows/build.yml`) builds both variants on every push,
+weekly and on demand, runs every test, and publishes the results into
+`docs/firmware/` so the web installer always offers a current build. The weekly run
+also regenerates the station table from MegaNet and commits it back if it changed, so
+the radio's station list follows the database without anyone editing this repo.
+Pushing a `v*` tag additionally attaches both packed images to a release.
 
-You need: the radio, the **Kenwood-style two-pin USB programming cable** (the same
-one CHIRP uses — a "K1" plug: 2.5 mm + 3.5 mm jacks into the side socket under the
-rubber flap, USB at the other end, usually a CH340 or PL2303 chip), and a laptop with
-**Chrome or Edge** (the web flasher uses Web Serial, which Firefox and Safari do not
-have). The whole thing takes about a minute; the radio can be flashed as many times
-as you like and cannot be "bricked" by a bad image because the bootloader is in a
-separate, protected part of the chip — if a flash goes wrong, just do it again.
+## Installing it on the radio
 
-### 1. Get the firmware file
+**→ [Open the installer](https://cdomotor-g.github.io/quansheng_alert/)** — one page, four
+steps, nothing to download.
 
-Either build it (`make` above → `firmware.packed.bin`), or download it from GitHub:
+It runs in Chrome or Edge on a computer, talks to the radio over the programming
+cable, and does the whole job itself: it carries the firmware, backs your radio up
+before touching it, waits for you to put the radio in bootloader mode, writes the
+firmware and then confirms what the radio is running afterwards. You need:
 
-* **Actions → build → the latest green run → Artifacts** — `quansheng-alert-default-…`
-  or `quansheng-alert-constitution-hill-…` (South-East Queensland station table).
-  Unzip it; you want the file ending in **`.packed.bin`** (the plain `.bin` is for
-  `k5prog` only).
-* or **Releases** (created when a `v*` tag is pushed) — the `.packed.bin` is attached.
+* the radio and its **USB programming cable** (the Kenwood-style two-pin plug, the
+  same cable CHIRP uses), and
+* **Chrome or Edge on a desktop or laptop** — the installer needs Web Serial, which
+  Firefox, Safari and every mobile browser lack.
 
-### 2. Back up the radio first (once)
+The four steps are: pick a build, connect, back up, install. Each screen explains
+what it is doing and what to do if it goes wrong, and the installer refuses to send
+anything it cannot verify first.
 
-Still on stock or egzumer firmware, plug the cable in, switch the radio on normally,
-open <https://egzumer.github.io/uvtools/>, go to **EEPROM → Backup** (called
-*Calibration / EEPROM backup* in some versions), **Connect**, pick the cable's COM
-port, and save the file it offers. That file holds the radio's calibration
-(squelch tables, TX power, battery); the firmware never writes to those areas, but
-having the backup means any experiment is reversible.
+**Nothing here can permanently damage the radio.** The bootloader lives in a separate
+part of the chip that is never written, so an interrupted flash leaves the radio in
+bootloader mode and you simply run the installer again.
 
-### 3. Put the radio into bootloader mode
+### What "back up" does and does not cover
 
-1. Switch the radio **off**.
-2. Plug the programming cable into the radio and the laptop.
-3. **Hold PTT** and, still holding it, turn the volume knob to switch the radio
-   **on**. The torch LED comes on **white/steady** and the screen stays blank (or
-   shows a bootloader version on some units). Let go of PTT.
+The installer's backup step saves your radio's **EEPROM**: the factory calibration,
+every channel and all your settings — the part that is unique to your radio and
+cannot be downloaded from anywhere. It is saved to your Downloads folder and a copy
+is kept in the browser. The **Toolbox → Restore a backup** section writes it back.
 
-If the LED does not come on, the radio booted normally — switch off and try again,
-pressing PTT before turning the knob.
+The firmware itself **cannot be backed up**: the bootloader has no read command, so
+no tool — this one, the official one, or `k5prog` — can read a radio's firmware out.
+That is not a problem in practice, because firmware is replaceable in a minute from
+the installer or from a stock image, whereas calibration is not.
 
-### 4. Flash
+### Going back to stock, or to another firmware
 
-1. Open <https://egzumer.github.io/uvtools/> in Chrome/Edge and choose
-   **Firmware flasher**.
-2. **Choose file** → select the `.packed.bin` from step 1.
-3. **Connect** → pick the cable's serial port from the browser pop-up
-   (on Windows it is "USB-SERIAL CH340 (COMx)"; if nothing is listed, install the
-   [CH340 driver](https://www.wch-ic.com/downloads/CH341SER_EXE.html) and re-plug).
-4. **Flash**. A progress bar runs for 10–20 s and the page says *done*.
-5. Switch the radio off and on. The boot screen shows the build tag (`ALERTRX` and
-   the git hash). Your channels and settings are untouched — only the firmware is
-   replaced.
+Use **Advanced → Use my own firmware file instead** in step 1 and pick any
+`.packed.bin` (stock Quansheng, egzumer, anything else). The fine-squelch and ALERT
+settings live in an EEPROM block no other firmware touches, so they are ignored by
+other builds and come back if you return to this one.
 
-Command-line alternative (Linux/macOS), with the radio in bootloader mode:
+### Which radio is this for?
+
+The original **DP32G030 + BK4819** hardware: UV-K5, UV-K5(8), UV-K6, UV-5R Plus — the
+one with the `M`/`A` … `EXIT`/`D` keypad. The newer **UV-K5 "V3" / UV-K1** use a
+different microcontroller and need a different firmware line; the installer will not
+damage one, but the firmware will not run on it.
+
+<details>
+<summary>Doing it by hand instead (or from Linux without a browser)</summary>
+
+Download `quansheng-alert-default.packed.bin` from
+[docs/firmware/](docs/firmware/) or from a release, then either use
+[egzumer's uvtools](https://egzumer.github.io/uvtools/), or with the radio in
+bootloader mode:
 
 ```sh
 git clone https://github.com/sq5bpf/k5prog && make -C k5prog
-k5prog/k5prog -F -YYY -b firmware.bin           # note: the plain .bin, not .packed.bin
+k5prog/k5prog -F -YYY -b docs/firmware/quansheng-alert-default.bin   # the raw .bin, not .packed.bin
 ```
 
-### 5. First-time settings
+Bootloader mode is: radio off, hold PTT, switch on — the torch LED glows white and
+the screen stays blank.
+</details>
 
-* Menu **Voice** → English (needed for the spoken readings).
-* Menu **Sql** → start at 0.0 and raise it until the static just stops.
-* Optionally menu **F1Long** (or F2Long / M Long) → `ALERT RX`, so one long press of
-  the side button opens the receiver; F then 0 always works too.
-* Tune VFO A to **151.500** FM (narrow), then F 0.
+### After the first install
 
-### Going back
+1. **Menu → Voice → English**, so it reads readings out.
+2. **Menu → Sql**: from `0.0` upwards until the static just goes quiet.
+3. Tune to **151.500 MHz**, FM.
+4. **F** then **0** opens the ALERT receiver.
 
-Flash any other `.packed.bin` (stock Quansheng 2.01.xx, egzumer, …) the same way.
-The fine-squelch and ALERT settings live in an EEPROM block no other firmware uses,
-so they are ignored, not harmful, and come back when this firmware is reflashed.
+## The installer, and hosting it
 
-### Which radio is it?
+The installer is a static page in [`docs/`](docs/) — no build step, no frameworks, no
+external requests. `docs/js/k5protocol.js` is the wire protocol, `docs/js/k5radio.js`
+drives Web Serial, `docs/js/app.js` is the wizard. The firmware it offers lives in
+`docs/firmware/` with a `manifest.json`, both written by `tools/publish_firmware.py`
+and refreshed by CI, which is why the page always offers a current build.
 
-This build is for the original **DP32G030 + BK4819** hardware: UV-K5, UV-K5(8), UV-K6,
-UV-5R Plus — the one in the photo with the `M`/`A` … `EXIT`/`D` keypad. The newer
-**UV-K5 "V3" / UV-K1** use a different MCU (PY32F071) and need a different firmware
-line; the web flasher refuses the image on those, nothing is damaged.
+It is a fresh implementation rather than a fork: the protocol is documented by
+[k5prog](https://github.com/sq5bpf/k5prog) and
+[uvmod](https://github.com/whosmatt/uvmod)/[uvtools](https://github.com/egzumer/uvtools),
+but none of their code is used here. What it adds over those tools is the guided
+flow, a backup that happens by default instead of being a separate page, firmware
+served with the tool so there is nothing to find and download, per-block retries,
+image validation before anything is written, automatic detection of bootloader mode,
+verification after the reboot, and an EEPROM restore.
 
-GitHub Actions (`.github/workflows/build.yml`) builds on every push, weekly, and on
-demand; the packed firmware is an artifact of every run and a release asset for
-`v*` tags. The weekly run also regenerates the station table from MegaNet and
-commits it back if it changed, so the radio's station list follows the database
-without anyone editing this repo.
+**To publish it (one-time, repository owner):** GitHub → **Settings** → **Pages** →
+under *Build and deployment* set **Source: Deploy from a branch**, **Branch: `main`**,
+**Folder: `/docs`** → **Save**. A minute later it is live at
+`https://cdomotor-g.github.io/quansheng_alert/`. Nothing else needs configuring, and
+every later push updates it.
+
+Testing it without a radio:
+
+```sh
+npm install          # playwright, only needed for the browser test
+npm test             # protocol vectors, then the whole wizard against a simulated radio
+```
+
+`test/test_installer.mjs` injects a fake serial port that speaks the real protocol,
+then drives the page from picking a build through to the post-reboot check, and
+compares the bytes the "radio" received against the real firmware image.
+
 
 ## The station table
 
@@ -320,6 +353,12 @@ app/alert_stations.c   flash table lookup
 app/alert_stations_gen.h   GENERATED from MegaNet — do not edit
 tools/gen_stations.py  generator (stdlib only) + tools/test_gen_stations.py
 stations.filter        which networks go into the table
-test/                  host unit tests: make -C test
+test/                  host unit tests: make -C test, npm test
+docs/                  the web installer served by GitHub Pages
+docs/js/k5protocol.js  UV-K5 wire protocol (framing, obfuscation, CRC, commands)
+docs/js/k5radio.js     Web Serial transport: backup, restore, flash
+docs/js/app.js         the four-step wizard
+docs/firmware/         published builds + manifest.json, written by CI
+tools/publish_firmware.py  copies a build into docs/firmware and updates the manifest
 radio.c, driver/bk4819.c, app/menu.c, ui/menu.c, settings.c   fine squelch + menus
 ```
