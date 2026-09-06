@@ -202,6 +202,13 @@ try {
 	await page.waitForFunction(() => document.getElementById('connect-status').textContent.includes('2.01.26'), null, { timeout: 5000 });
 	check('the running firmware version is read back', true);
 
+	// --- toolbox: listening to a radio that is on normally ends in a hello
+	await page.locator('#btn-listen').evaluate(el => { el.closest('details').open = true; });
+	await page.locator('#btn-listen').click();
+	await page.waitForFunction(() => /answered|arrived|bytes/.test(document.getElementById('listen-status').textContent), null, { timeout: 10000 });
+	const quiet = await page.locator('#listen-status').textContent();
+	check('listening to a radio on normally reports its firmware via hello', /switched on normally.*2\.01\.26/.test(quiet), quiet);
+
 	// --- step 3: backup
 	const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
 	await page.locator('#btn-backup').click();
@@ -259,6 +266,16 @@ try {
 	const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('quansheng_alert.history') || '[]').map(i => i.kind));
 	check('the backup and the install are both recorded on this computer',
 	      stored.includes('backup') && stored.includes('install'), JSON.stringify(stored));
+
+	// --- toolbox: listening to a radio in bootloader mode counts its beacons
+	await page.evaluate(() => window.__setMode('boot'));
+	await page.locator('#btn-listen').evaluate(el => { el.closest('details').open = true; });
+	await page.locator('#btn-listen').click();
+	await page.waitForFunction(() => /beacons|arrived|bytes/.test(document.getElementById('listen-status').textContent), null, { timeout: 10000 });
+	const noisy = await page.locator('#listen-status').textContent();
+	const count = +(noisy.match(/(\d+) beacons/) || [])[1];
+	check('listening to a radio in bootloader mode counts its beacons', /bootloader mode and the cable is good/.test(noisy) && count >= 8, noisy);
+	await page.evaluate(() => window.__setMode('normal'));
 
 	check('no JavaScript errors on the page', errors.length === 0, errors.join('\n        '));
 } catch (err) {

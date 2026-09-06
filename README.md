@@ -185,6 +185,28 @@ anything it cannot verify first.
 part of the chip that is never written, so an interrupted flash leaves the radio in
 bootloader mode and you simply run the installer again.
 
+### If the installer says the radio did not answer
+
+Two things look like a baud-rate problem and are not. A radio switched on normally
+says nothing until asked, so silence is expected; and a radio in bootloader mode sends
+binary, scrambled packets, so what a terminal shows at 38400 is gibberish *when
+everything is working*. The rate is fixed at 38400 8N1 in the radio and in every tool.
+
+`tools/k5diag.py` settles it from the command line (`pip install pyserial` first):
+
+```sh
+python tools/k5diag.py --port COM3           # listen, then hello, then a baud scan if needed
+python tools/k5diag.py --port COM3 listen    # radio in bootloader mode: counts its beacons
+python tools/k5diag.py --port COM3 hello     # radio on normally: reads its firmware version
+```
+
+It reads the bootloader's beacons and checks their checksums, so "beacons at 38400"
+proves the cable, the polarity and the rate in one go; the remaining suspects are then
+on the computer side — most often another program (a terminal, CHIRP, a second
+browser tab) still holding the port. The installer's **Toolbox → Listen to the port**
+runs the same check in the browser. Wiring faults are covered in
+[docs/cable/](docs/cable/index.html#diagnose).
+
 ### What "back up" does and does not cover
 
 The installer's backup step saves your radio's **EEPROM**: the factory calibration,

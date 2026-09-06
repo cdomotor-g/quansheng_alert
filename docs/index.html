@@ -179,6 +179,18 @@
   </details>
 
   <details>
+    <summary>Listen to the port</summary>
+    <p class="hint">Watches the cable for a few seconds and says what is arriving, without
+       sending anything to the radio. With the radio in bootloader mode (off, hold PTT, on)
+       it counts the radio’s beacons and checks their checksums, which proves the wiring,
+       the polarity and the baud rate in one go. A terminal program shows those same beacons
+       as gibberish even when all is well — they are scrambled binary — so this is the
+       honest test. Connect first (step 2).</p>
+    <div class="row"><button id="btn-listen" class="ghost">Listen for 4 seconds</button></div>
+    <p id="listen-status" class="status"></p>
+  </details>
+
+  <details>
     <summary>Restore a backup onto the radio</summary>
     <p class="hint">Writes a previously saved EEPROM backup back into the radio:
        calibration, channels and settings. The radio must be switched on

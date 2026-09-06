@@ -17,6 +17,8 @@ class K5Radio {
 		this.buffer  = new Uint8Array(0);
 		this.reading = false;
 		this.onLost  = null;        // called if the cable is pulled
+		this.stats   = { bytes: 0, packets: 0, badCrc: 0, beacons: 0 };   // since connect
+		this._capture = null;       // raw bytes being collected for listen()
 	}
 
 	static get supported() {
@@ -82,6 +84,10 @@ class K5Radio {
 	}
 
 	_feed(chunk) {
+		this.stats.bytes += chunk.length;
+		if (this._capture && this._capture.length < 64)
+			this._capture.push(...chunk.subarray(0, 64 - this._capture.length));
+
 		const merged = new Uint8Array(this.buffer.length + chunk.length);
 		merged.set(this.buffer, 0);
 		merged.set(chunk, this.buffer.length);
@@ -90,7 +96,9 @@ class K5Radio {
 		this.buffer = rest.length > 4096 ? rest.subarray(rest.length - 4096) : rest;
 
 		for (const pkt of packets) {
-			if (!pkt.crcOk) { this.log('Ignored a packet with a bad checksum.'); continue; }
+			if (!pkt.crcOk) { this.stats.badCrc++; this.log('Ignored a packet with a bad checksum.'); continue; }
+			this.stats.packets++;
+			if (K5Radio.isBootloaderBroadcast(pkt.payload)) this.stats.beacons++;
 			// hand it straight to a waiter if one matches, else queue it
 			const idx = this.waiters.findIndex(w => w.want === null || w.want === pkt.payload[0]);
 			if (idx >= 0) {
@@ -136,6 +144,31 @@ class K5Radio {
 	}
 
 	drain() { this.queue = []; }
+
+	// Just watch the line for `ms` and report what arrived: raw byte count,
+	// packets that framed and passed their checksum, packets that did not,
+	// bootloader beacons among them, and the first bytes seen. Nothing is
+	// sent. This is the fault-finding check: a terminal shows the bootloader's
+	// beacons as gibberish even when everything is right, because they are
+	// scrambled binary, so counting them properly is the only honest test.
+	async listen(ms) {
+		if (!this.connected) throw new Error('The radio is not connected.');
+		const before = { ...this.stats };
+		this._capture = [];
+		this.drain();
+		await new Promise(resolve => setTimeout(resolve, ms));
+		const sample = Uint8Array.from(this._capture);
+		this._capture = null;
+		this.drain();
+		const after = this.stats;
+		return {
+			bytes:   after.bytes   - before.bytes,
+			packets: after.packets - before.packets,
+			badCrc:  after.badCrc  - before.badCrc,
+			beacons: after.beacons - before.beacons,
+			sample,
+		};
+	}
 
 	async request(payload, want, timeoutMs = 1500, attempts = 3) {
 		let last;

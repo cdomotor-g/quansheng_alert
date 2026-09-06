@@ -430,6 +430,59 @@ async function identify() {
 	}
 }
 
+// Toolbox -> Listen to the port. Says what is arriving on the cable and what
+// that means, so "the radio did not answer" can be pinned on one side or the
+// other without a terminal program and a hex chart.
+async function listenPort() {
+	if (!state.radio) { say('listen-status', 'Connect to the radio first (step 2).', 'bad'); return; }
+	const secs = 4;
+	$('btn-listen').disabled = true;
+	say('listen-status', `Listening for ${secs} seconds…`, 'busy');
+	try {
+		const r   = await state.radio.listen(secs * 1000);
+		const hex = Array.from(r.sample, b => b.toString(16).padStart(2, '0')).join(' ');
+		log(`Listened ${secs} s: ${r.bytes} bytes, ${r.packets} packets, ${r.badCrc} bad checksums, ` +
+		    `${r.beacons} bootloader beacons` + (hex ? ` - first bytes: ${hex}` : ''));
+
+		if (r.beacons) {
+			say('listen-status',
+				`The radio is in bootloader mode and the cable is good: ${r.beacons} beacons in ${secs} s ` +
+				`with correct checksums at 38400 baud${r.badCrc ? ` (${r.badCrc} damaged, so the line is a little noisy)` : ''}. ` +
+				'That proves the wiring, the polarity and ' +
+				'the baud rate. If installing still fails, the cause is on this computer: usually another ' +
+				'program (a terminal, CHIRP, another tab) holding the port, or the browser being given the wrong port.', 'ok');
+		} else if (r.packets) {
+			say('listen-status',
+				`${r.packets} packets arrived and passed their checksum, but none were bootloader beacons. ` +
+				'The line is good. Use "What is my radio running?" to identify the firmware.', 'ok');
+		} else if (r.bytes) {
+			say('listen-status',
+				`${r.bytes} bytes arrived but none of them framed as packets (they start: ${hex}). ` +
+				'The radio is talking, but the bytes are being read wrongly. The radio only ever speaks ' +
+				'38400 8N1, so this is not a baud setting to change; look for an inverted signal (some ' +
+				'adapters and cables invert), a plug not fully home, or a 5 V adapter loading the line.', 'bad');
+		} else {
+			// Silence. A radio switched on normally says nothing unless asked, so ask.
+			try {
+				const version = await state.radio.hello(1500);
+				say('listen-status',
+					`Nothing was sent unprompted, but the radio answered when asked: it is switched on normally ` +
+					`and running ${version}. The cable works in both directions and the baud rate is right.`, 'ok');
+			} catch {
+				say('listen-status',
+					`Nothing arrived in ${secs} s and the radio did not answer a hello either. If it is in ` +
+					'bootloader mode (white torch LED, blank screen), its transmit line is not reaching the ' +
+					'adapter: swap TX and RX at the adapter end, and check the 2.5 mm plug is fully home. If it ' +
+					'is switched on normally, check the same things plus the 3.5 mm plug.', 'bad');
+			}
+		}
+	} catch (err) {
+		say('listen-status', `Could not listen: ${err.message}`, 'bad');
+	} finally {
+		$('btn-listen').disabled = false;
+	}
+}
+
 let restoreBytes = null;
 
 async function pickRestoreFile(ev) {
@@ -495,6 +548,7 @@ async function init() {
 	on('btn-backup',     'click', backup);
 	on('btn-flash',      'click', flash);
 	on('btn-identify',   'click', identify);
+	on('btn-listen',     'click', listenPort);
 	on('btn-restore',    'click', restore);
 	on('restore-file',   'change', pickRestoreFile);
 

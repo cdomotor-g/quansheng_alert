@@ -419,14 +419,35 @@
         try, and it is the single most common mistake.</li>
     <li><strong>Still silent:</strong> check the plugs are fully home. These jacks are stiff, and
         a plug that is a millimetre out contacts the wrong ring.</li>
-    <li><strong>Garbage instead of answers:</strong> baud rate. The radio is 38400 8N1 and is not
-        negotiable.</li>
+    <li><strong>Garbage in a terminal:</strong> not, on its own, a baud-rate problem. The radio is
+        38400 8N1 and that is not negotiable — but its packets are binary and scrambled, so even at
+        the right rate a terminal shows nonsense, in bootloader mode a burst of it about twice a
+        second. Switch the terminal to a hex view: each burst should begin <code>AB CD</code> and
+        end <code>DC BA</code>. If it does, the line is fine and the installer’s problem is on the
+        computer side (usually another program holding the port). If it does not, let
+        <a href="#diagnose">the diagnostic script</a> try every rate and check the checksums.</li>
     <li>Recheck ground last — if ground is wrong nothing works at all, so it is rarely the
         survivor of the earlier tests.</li>
   </ul>
 </section>
 
 <section class="card">
+  <h3 id="diagnose">Letting a script do the fault-finding</h3>
+  <p><code>tools/k5diag.py</code> in the repository runs the checks above from the command line and
+     says which side is at fault. It needs Python 3 and <code>pip install pyserial</code>, and it
+     never writes to the radio — the only thing it ever sends is the same harmless
+     “what are you running?” question as the Toolbox.</p>
+<pre>python tools/k5diag.py --port COM3            # every check, with a verdict
+python tools/k5diag.py --port COM3 listen     # radio in bootloader mode: are beacons framing at 38400?
+python tools/k5diag.py --port COM3 scan       # same, at every plausible baud rate
+python tools/k5diag.py --port COM3 hello      # radio on normally: does it answer with its version?
+python tools/k5diag.py --port COM3 loopback   # adapter TX shorted to RX: does the adapter work at all?
+python tools/k5diag.py ports                  # which port is the cable?</pre>
+  <p class="hint">With the radio in bootloader mode, <code>listen</code> is the decisive test: it
+     counts the beacons that pass their checksum and reads the bootloader’s version out of them.
+     If it reports beacons, baud rate, polarity and the radio’s transmit line are all proven at
+     once. The installer’s Toolbox has the same check under <em>Listen to the port</em>.</p>
+
   <h2>What else the cable is good for</h2>
   <p>Once built, the same cable carries the ALERT receiver’s output. With the firmware running,
      every decoded reading is written to the serial port as a line of CSV:</p>
