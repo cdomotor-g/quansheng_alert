@@ -69,7 +69,8 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 // commands with the page's own K5 codec and whose readable side answers them.
 function installFakeRadio() {
 	const radio = {
-		mode: 'normal',                       // 'normal' | 'boot'
+		mode: 'normal',                       // 'normal' | 'boot' | 'noise' | 'loop'
+		opens: [],                            // baud rate of every open()
 		version: '2.01.26',
 		eeprom: null,
 		flashed: new Map(),                   // address -> Uint8Array(0x100)
@@ -94,6 +95,8 @@ function installFakeRadio() {
 		broadcast = setInterval(() => {
 			if (radio.mode === 'boot')
 				send([0x18, 0x05, 0x20, 0x00, 0x01, 0x02, 0x02, ...new Array(0x1d).fill(0)]);
+			if (radio.mode === 'noise' && controller)      // a line sampled at the wrong rate
+				controller.enqueue(Uint8Array.from({ length: 20 }, () => Math.random() * 256));
 		}, 300);
 	};
 
@@ -105,6 +108,8 @@ function installFakeRadio() {
 
 	const handle = (payload) => {
 		const cmd = payload[0];
+		if (radio.mode === 'noise') return;                     // a mis-sampled line hears nothing either
+
 
 		if (radio.mode === 'boot') {
 			if (cmd === 0x30) {                                  // version presented
@@ -140,20 +145,37 @@ function installFakeRadio() {
 
 	let rxBuffer = new Uint8Array(0);
 
+	// Like the real thing, the streams exist only while the port is open and
+	// are made afresh on every open(), so the cable check can close and reopen
+	// the port at other baud rates.
 	const port = {
-		readable: new ReadableStream({ start(c) { controller = c; } }),
-		writable: new WritableStream({
-			write(chunk) {
-				const merged = new Uint8Array(rxBuffer.length + chunk.length);
-				merged.set(rxBuffer, 0);
-				merged.set(chunk, rxBuffer.length);
-				const { packets, rest } = window.K5.deframe(merged);
-				rxBuffer = rest;
-				for (const p of packets) if (p.crcOk) handle(p.payload);
-			},
-		}),
-		async open() { radio.opened = true; startBroadcast(); },
-		async close() { radio.opened = false; clearInterval(broadcast); },
+		readable: null,
+		writable: null,
+		async open(opts) {
+			radio.opened = true;
+			radio.opens.push(opts.baudRate);
+			this.readable = new ReadableStream({ start(c) { controller = c; }, cancel() { controller = null; } });
+			this.writable = new WritableStream({
+				write(chunk) {
+					if (radio.mode === 'loop') { if (controller) controller.enqueue(Uint8Array.from(chunk)); return; }
+					const merged = new Uint8Array(rxBuffer.length + chunk.length);
+					merged.set(rxBuffer, 0);
+					merged.set(chunk, rxBuffer.length);
+					const { packets, rest } = window.K5.deframe(merged);
+					rxBuffer = rest;
+					for (const p of packets) if (p.crcOk) handle(p.payload);
+				},
+			});
+			startBroadcast();
+		},
+		async close() {
+			radio.opened = false;
+			clearInterval(broadcast);
+			if (this.readable.locked || this.writable.locked) throw new DOMException('port is locked', 'InvalidStateError');
+			controller = null;
+			this.readable = null;
+			this.writable = null;
+		},
 		getInfo() { return { usbVendorId: 0x1a86, usbProductId: 0x7523 }; },
 	};
 
@@ -202,12 +224,18 @@ try {
 	await page.waitForFunction(() => document.getElementById('connect-status').textContent.includes('2.01.26'), null, { timeout: 5000 });
 	check('the running firmware version is read back', true);
 
-	// --- toolbox: listening to a radio that is on normally ends in a hello
-	await page.locator('#btn-listen').evaluate(el => { el.closest('details').open = true; });
-	await page.locator('#btn-listen').click();
-	await page.waitForFunction(() => /answered|arrived|bytes/.test(document.getElementById('listen-status').textContent), null, { timeout: 10000 });
-	const quiet = await page.locator('#listen-status').textContent();
-	check('listening to a radio on normally reports its firmware via hello', /switched on normally.*2\.01\.26/.test(quiet), quiet);
+	// --- toolbox: checking the cable with a radio that is on normally ends in a hello
+	const cableCheck = async (timeout = 15000) => {
+		await page.locator('#btn-cable').evaluate(el => { el.closest('details').open = true; });
+		await page.evaluate(() => { document.getElementById('cable-status').textContent = ''; });
+		await page.locator('#btn-cable').click();
+		await page.waitForFunction(() => /answered|arrived|silence|valid|stopped|packets|beacons/i.test(document.getElementById('cable-status').textContent), null, { timeout });
+		return page.locator('#cable-status').textContent();
+	};
+	const quiet = await cableCheck();
+	check('cable check on a radio on normally reports its firmware via hello', /switched on normally.*2\.01\.26/.test(quiet), quiet);
+	const report = await page.locator('#cable-report').textContent();
+	check('the cable report names the adapter chip', /CH340/.test(report), report);
 
 	// --- step 3: backup
 	const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
@@ -267,14 +295,26 @@ try {
 	check('the backup and the install are both recorded on this computer',
 	      stored.includes('backup') && stored.includes('install'), JSON.stringify(stored));
 
-	// --- toolbox: listening to a radio in bootloader mode counts its beacons
+	// --- toolbox: the cable check with a radio in bootloader mode counts its beacons
 	await page.evaluate(() => window.__setMode('boot'));
-	await page.locator('#btn-listen').evaluate(el => { el.closest('details').open = true; });
-	await page.locator('#btn-listen').click();
-	await page.waitForFunction(() => /beacons|arrived|bytes/.test(document.getElementById('listen-status').textContent), null, { timeout: 10000 });
-	const noisy = await page.locator('#listen-status').textContent();
-	const count = +(noisy.match(/(\d+) beacons/) || [])[1];
-	check('listening to a radio in bootloader mode counts its beacons', /bootloader mode and the cable is good/.test(noisy) && count >= 8, noisy);
+	const booted = await cableCheck();
+	const count = +(booted.match(/(\d+) beacons/) || [])[1];
+	check('cable check on a radio in bootloader mode counts its beacons', /bootloader mode and the cable is good/.test(booted) && count >= 6, booted);
+
+	// --- toolbox: bytes that never frame trigger the baud scan, which comes back to 38400
+	await page.evaluate(() => { window.__radio.opens = []; window.__setMode('noise'); });
+	const noisy = await cableCheck(60000);
+	check('unframeable bytes trigger a baud scan whose verdict is not the rate', /no valid packet at any of them/.test(noisy), noisy);
+	const opens = await page.evaluate(() => window.__radio.opens);
+	check('the scan tried every rate and left the port back at 38400',
+	      opens.length >= 10 && opens.includes(115200) && opens.includes(9600) && opens[opens.length - 1] === 38400, JSON.stringify(opens));
+
+	// --- toolbox: the adapter-only loopback
+	await page.evaluate(() => window.__setMode('loop'));
+	await page.locator('#btn-loopback').click();
+	await page.waitForFunction(() => /echoed|garbled|No echo|stopped/.test(document.getElementById('cable-status').textContent), null, { timeout: 10000 });
+	const loop = await page.locator('#cable-status').textContent();
+	check('a shorted adapter echoes the loopback probe', /echoed the test string/.test(loop), loop);
 	await page.evaluate(() => window.__setMode('normal'));
 
 	check('no JavaScript errors on the page', errors.length === 0, errors.join('\n        '));

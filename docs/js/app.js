@@ -430,56 +430,166 @@ async function identify() {
 	}
 }
 
-// Toolbox -> Listen to the port. Says what is arriving on the cable and what
-// that means, so "the radio did not answer" can be pinned on one side or the
-// other without a terminal program and a hex chart.
-async function listenPort() {
-	if (!state.radio) { say('listen-status', 'Connect to the radio first (step 2).', 'bad'); return; }
-	const secs = 4;
-	$('btn-listen').disabled = true;
-	say('listen-status', `Listening for ${secs} seconds…`, 'busy');
+// Toolbox -> Check the cable. The browser-side version of tools/k5diag.py:
+// identify the adapter, listen at 38400, ask a hello, and only if bytes are
+// arriving that do not frame, try the other rates. Each step is written to a
+// report the user can copy, and the verdict names a side to look at.
+
+const CHIPS = {
+	'1a86:7523': 'CH340, the usual K5 cable chip',
+	'1a86:55d4': 'CH9102',
+	'10c4:ea60': 'CP210x',
+	'067b:2303': 'PL2303 - often counterfeit, and current Windows drivers refuse those',
+	'067b:23a3': 'PL2303GC',
+	'0403:6001': 'FTDI FT232',
+};
+const SCAN_BAUDS = [38400, 115200, 57600, 19200, 9600, 76800, 128000, 230400, 4800, 460800];
+
+const hexOf = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join(' ');
+
+function reportTo(id) {
+	const box = $(id);
+	box.textContent = '';
+	box.hidden = false;
+	return (line) => {
+		box.textContent += (box.textContent ? '\n' : '') + line;
+		log(line);
+	};
+}
+
+async function checkCable() {
+	if (!state.radio) { say('cable-status', 'Connect to the radio first (step 2).', 'bad'); return; }
+	const radio = state.radio;
+	const line  = reportTo('cable-report');
+	const done  = (msg, kind) => { say('cable-status', msg, kind); line('=> ' + msg); };
+	$('btn-cable').disabled = true;
+	$('btn-loopback').disabled = true;
 	try {
-		const r   = await state.radio.listen(secs * 1000);
-		const hex = Array.from(r.sample, b => b.toString(16).padStart(2, '0')).join(' ');
-		log(`Listened ${secs} s: ${r.bytes} bytes, ${r.packets} packets, ${r.badCrc} bad checksums, ` +
-		    `${r.beacons} bootloader beacons` + (hex ? ` - first bytes: ${hex}` : ''));
+		// 1. the adapter
+		const { vid, pid } = radio.info();
+		if (vid) {
+			const key = `${vid.toString(16).padStart(4, '0')}:${pid.toString(16).padStart(4, '0')}`;
+			line(`Adapter: USB ${key}` + (CHIPS[key] ? ` - ${CHIPS[key]}` : ''));
+		} else {
+			line('Adapter: no USB identity (a built-in COM port, or a driver that hides it)');
+		}
+
+		// 2. listen at the radio's one and only rate
+		const secs = 3;
+		say('cable-status', `Listening at 38400 baud for ${secs} seconds…`, 'busy');
+		if (radio.baud !== K5Radio.BAUD) await radio.reopen(K5Radio.BAUD);
+		const r = await radio.listen(secs * 1000);
+		line(`Listened ${secs} s at 38400: ${r.bytes} bytes, ${r.packets} good packets, ${r.badCrc} bad checksums, ` +
+		     `${r.beacons} bootloader beacons` + (r.sample.length ? `\n  first bytes: ${hexOf(r.sample)}` : ''));
 
 		if (r.beacons) {
-			say('listen-status',
-				`The radio is in bootloader mode and the cable is good: ${r.beacons} beacons in ${secs} s ` +
-				`with correct checksums at 38400 baud${r.badCrc ? ` (${r.badCrc} damaged, so the line is a little noisy)` : ''}. ` +
-				'That proves the wiring, the polarity and ' +
-				'the baud rate. If installing still fails, the cause is on this computer: usually another ' +
-				'program (a terminal, CHIRP, another tab) holding the port, or the browser being given the wrong port.', 'ok');
-		} else if (r.packets) {
-			say('listen-status',
-				`${r.packets} packets arrived and passed their checksum, but none were bootloader beacons. ` +
-				'The line is good. Use "What is my radio running?" to identify the firmware.', 'ok');
-		} else if (r.bytes) {
-			say('listen-status',
-				`${r.bytes} bytes arrived but none of them framed as packets (they start: ${hex}). ` +
-				'The radio is talking, but the bytes are being read wrongly. The radio only ever speaks ' +
-				'38400 8N1, so this is not a baud setting to change; look for an inverted signal (some ' +
-				'adapters and cables invert), a plug not fully home, or a 5 V adapter loading the line.', 'bad');
-		} else {
-			// Silence. A radio switched on normally says nothing unless asked, so ask.
+			done(`The radio is in bootloader mode and the cable is good: ${r.beacons} beacons in ${secs} s with ` +
+			     `correct checksums at 38400 baud${r.badCrc ? ` (${r.badCrc} damaged, so the line is a little noisy)` : ''}. ` +
+			     'That proves the wiring, the polarity and the baud rate. If installing still fails, the cause is on ' +
+			     'this computer: usually another program (a terminal, CHIRP, another tab) holding the port, or the ' +
+			     'browser being given the wrong port.', 'ok');
+			return;
+		}
+		if (r.packets) {
+			done(`${r.packets} packets arrived and passed their checksum, but none were bootloader beacons. ` +
+			     'The line is good. Use "What is my radio running?" to identify the firmware.', 'ok');
+			return;
+		}
+
+		// 3. a radio switched on normally says nothing until asked
+		say('cable-status', 'Nothing unprompted. Asking the radio for its version…', 'busy');
+		try {
+			const version = await radio.hello(1500);
+			line(`Hello: answered, running ${version}`);
+			done(`Nothing was sent unprompted, but the radio answered when asked: it is switched on normally ` +
+			     `and running ${version}. The cable works in both directions and the baud rate is right.`, 'ok');
+			return;
+		} catch {
+			line('Hello: no answer');
+		}
+
+		// 4. bytes that do not frame: is it really the rate? Try the others.
+		if (!r.bytes) {
+			done(`Nothing arrived in ${secs} s and the radio did not answer a hello. If it is in bootloader ` +
+			     'mode (white torch LED, blank screen), its transmit line is not reaching the adapter: swap TX ' +
+			     'and RX at the adapter end, and check the 2.5 mm plug is fully home. If it is switched on ' +
+			     'normally, check the same things plus the 3.5 mm plug. To rule the adapter itself out, short ' +
+			     'its TX to its RX and press "Test the adapter alone".', 'bad');
+			return;
+		}
+
+		line('');
+		line('Bytes arrived that did not frame, so trying every plausible rate (radio in bootloader mode, please):');
+		line('   baud   bytes  packets  beacons');
+		const results = {};
+		for (const baud of SCAN_BAUDS) {
+			say('cable-status', `Trying ${baud} baud…`, 'busy');
 			try {
-				const version = await state.radio.hello(1500);
-				say('listen-status',
-					`Nothing was sent unprompted, but the radio answered when asked: it is switched on normally ` +
-					`and running ${version}. The cable works in both directions and the baud rate is right.`, 'ok');
-			} catch {
-				say('listen-status',
-					`Nothing arrived in ${secs} s and the radio did not answer a hello either. If it is in ` +
-					'bootloader mode (white torch LED, blank screen), its transmit line is not reaching the ' +
-					'adapter: swap TX and RX at the adapter end, and check the 2.5 mm plug is fully home. If it ' +
-					'is switched on normally, check the same things plus the 3.5 mm plug.', 'bad');
+				await radio.reopen(baud);
+			} catch (err) {
+				// some drivers refuse the odd rates; that says nothing about the radio
+				line(`${String(baud).padStart(7)}  the driver would not open the port at this rate`);
+				continue;
 			}
+			const s = await radio.listen(1500);
+			results[baud] = s;
+			line(`${String(baud).padStart(7)}  ${String(s.bytes).padStart(6)}  ${String(s.packets).padStart(7)}  ${String(s.beacons).padStart(7)}`);
+		}
+		await radio.reopen(K5Radio.BAUD);
+
+		const framed = SCAN_BAUDS.filter(b => results[b] && results[b].packets);
+		const noisy  = SCAN_BAUDS.filter(b => results[b] && results[b].bytes);
+		if (framed.includes(K5Radio.BAUD)) {
+			done('Valid packets at 38400 this time - the standard rate - so the earlier run caught noise. ' +
+			     'Nothing needs changing; run the check again.', 'ok');
+		} else if (framed.length) {
+			done(`Valid packets only at ${framed[0]} baud, which no known UV-K5 bootloader uses. Check the ` +
+			     'adapter\'s driver is not applying a divisor, and that this is really a UV-K5 (the V3/UV-K1 is a different chip).', 'bad');
+		} else if (noisy.length) {
+			done('Bytes at some rates but no valid packet at any of them. A baud mismatch would have shown ' +
+			     'up in the table, so it is not the rate: look for an inverted signal (some adapters and cables ' +
+			     'invert), plugs not fully home, or a 5 V adapter loading the line.', 'bad');
+		} else {
+			done('Silence at every rate. The radio\'s transmit line is not reaching the adapter: wrong contact ' +
+			     'on the 2.5 mm plug, TX/RX swapped, or the radio is not actually in bootloader mode.', 'bad');
 		}
 	} catch (err) {
-		say('listen-status', `Could not listen: ${err.message}`, 'bad');
+		say('cable-status', `The check stopped: ${err.message}`, 'bad');
+		line(`Stopped: ${err.message}`);
 	} finally {
-		$('btn-listen').disabled = false;
+		if (radio.connected && radio.baud !== K5Radio.BAUD) {
+			try { await radio.reopen(K5Radio.BAUD); } catch { /* reported above */ }
+		}
+		$('btn-cable').disabled = false;
+		$('btn-loopback').disabled = false;
+	}
+}
+
+// Toolbox -> Test the adapter alone. Adapter TX shorted to RX, no radio.
+async function testAdapter() {
+	if (!state.radio) { say('cable-status', 'Connect to the adapter first (step 2).', 'bad'); return; }
+	const line = reportTo('cable-report');
+	$('btn-cable').disabled = true;
+	$('btn-loopback').disabled = true;
+	say('cable-status', 'Sending a test string and waiting for it to come back…', 'busy');
+	try {
+		const r = await state.radio.loopback();
+		line(`Loopback: sent ${hexOf(r.sent)}` + (r.got.length ? `\n  got  ${hexOf(r.got)}` : '\n  got nothing'));
+		if (r.ok) {
+			say('cable-status', 'The adapter echoed the test string: the adapter and its driver work at 38400 baud. ' +
+			    'Now remove the short, plug the radio in and run "Check the cable".', 'ok');
+		} else if (r.got.length) {
+			say('cable-status', 'A garbled echo came back: the adapter is talking to itself but corrupting data. ' +
+			    'Try another USB port or another adapter; counterfeit PL2303s do this.', 'bad');
+		} else {
+			say('cable-status', 'No echo. Either TX and RX are not actually shorted, or the adapter or its driver ' +
+			    'is dead. Nothing about the radio can be tested until this passes.', 'bad');
+		}
+	} catch (err) {
+		say('cable-status', `The test stopped: ${err.message}`, 'bad');
+	} finally {
+		$('btn-cable').disabled = false;
+		$('btn-loopback').disabled = false;
 	}
 }
 
@@ -548,7 +658,8 @@ async function init() {
 	on('btn-backup',     'click', backup);
 	on('btn-flash',      'click', flash);
 	on('btn-identify',   'click', identify);
-	on('btn-listen',     'click', listenPort);
+	on('btn-cable',      'click', checkCable);
+	on('btn-loopback',   'click', testAdapter);
 	on('btn-restore',    'click', restore);
 	on('restore-file',   'change', pickRestoreFile);
 

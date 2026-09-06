@@ -203,8 +203,8 @@ python tools/k5diag.py --port COM3 hello     # radio on normally: reads its firm
 It reads the bootloader's beacons and checks their checksums, so "beacons at 38400"
 proves the cable, the polarity and the rate in one go; the remaining suspects are then
 on the computer side — most often another program (a terminal, CHIRP, a second
-browser tab) still holding the port. The installer's **Toolbox → Listen to the port**
-runs the same check in the browser. Wiring faults are covered in
+browser tab) still holding the port. The installer's **Toolbox → Check the cable**
+runs the same sequence in the browser, no Python needed. Wiring faults are covered in
 [docs/cable/](docs/cable/index.html#diagnose).
 
 ### What "back up" does and does not cover

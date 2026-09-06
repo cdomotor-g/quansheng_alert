@@ -36,26 +36,59 @@ class K5Radio {
 			throw new Error('This browser has no Web Serial support.');
 
 		this.port = await navigator.serial.requestPort();
-		await this.port.open({
-			baudRate: 38400, dataBits: 8, stopBits: 1, parity: 'none',
-			bufferSize: 4096, flowControl: 'none',
-		});
-		this.log('Serial port open at 38400 baud.');
-		this._readLoop();
+		await this._open(K5Radio.BAUD);
 	}
 
 	async disconnect() {
+		await this._close();
+		this.port = null;
+		this.log('Serial port closed.');
+	}
+
+	static get BAUD() { return 38400; }
+
+	// Close and reopen the same port at another rate, without the user having
+	// to pick it again. Only the cable check uses this: the radio itself is
+	// 38400 and nothing else, so the last thing the check does is come back.
+	async reopen(baudRate) {
+		if (!this.port) throw new Error('The radio is not connected.');
+		await this._close();
+		await this._open(baudRate);
+	}
+
+	// What the browser knows about the adapter: its USB vendor and product
+	// ids, or nothing for a built-in COM port.
+	info() {
+		const i = (this.port && this.port.getInfo) ? this.port.getInfo() : {};
+		return { vid: i.usbVendorId || 0, pid: i.usbProductId || 0 };
+	}
+
+	async _open(baudRate) {
+		await this.port.open({
+			baudRate, dataBits: 8, stopBits: 1, parity: 'none',
+			bufferSize: 4096, flowControl: 'none',
+		});
+		this.baud = baudRate;
+		this.log(`Serial port open at ${baudRate} baud.`);
+		this._loopDone = this._readLoop();
+	}
+
+	async _close() {
 		this.reading = false;
 		try {
 			if (this._reader) { await this._reader.cancel().catch(() => {}); }
 		} catch { /* ignore */ }
+		// let the read loop release its lock before closing, else close() rejects
+		if (this._loopDone) {
+			await Promise.race([this._loopDone, new Promise(r => setTimeout(r, 1000))]);
+			this._loopDone = null;
+		}
 		try {
 			if (this.port) await this.port.close();
 		} catch { /* ignore */ }
-		this.port = null;
 		this.queue = [];
+		this.buffer = new Uint8Array(0);
 		this._rejectAll(new Error('Disconnected.'));
-		this.log('Serial port closed.');
 	}
 
 	async _readLoop() {
@@ -151,6 +184,23 @@ class K5Radio {
 	// sent. This is the fault-finding check: a terminal shows the bootloader's
 	// beacons as gibberish even when everything is right, because they are
 	// scrambled binary, so counting them properly is the only honest test.
+	// Send a few plain bytes and see whether they come straight back: the
+	// test for an adapter whose TX has been shorted to its RX, with no radio
+	// attached. Proves the adapter and its driver before the radio is blamed.
+	async loopback(ms = 800) {
+		if (!this.connected) throw new Error('The radio is not connected.');
+		const probe = new TextEncoder().encode('K5-LOOP-' + Date.now());
+		this._capture = [];
+		const writer = this.port.writable.getWriter();
+		try { await writer.write(probe); } finally { writer.releaseLock(); }
+		await new Promise(resolve => setTimeout(resolve, ms));
+		const got = Uint8Array.from(this._capture);
+		this._capture = null;
+		this.drain();
+		const ok = got.length === probe.length && got.every((b, i) => b === probe[i]);
+		return { ok, sent: probe, got };
+	}
+
 	async listen(ms) {
 		if (!this.connected) throw new Error('The radio is not connected.');
 		const before = { ...this.stats };

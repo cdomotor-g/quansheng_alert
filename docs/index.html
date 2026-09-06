@@ -179,15 +179,20 @@
   </details>
 
   <details>
-    <summary>Listen to the port</summary>
-    <p class="hint">Watches the cable for a few seconds and says what is arriving, without
-       sending anything to the radio. With the radio in bootloader mode (off, hold PTT, on)
-       it counts the radio’s beacons and checks their checksums, which proves the wiring,
-       the polarity and the baud rate in one go. A terminal program shows those same beacons
-       as gibberish even when all is well — they are scrambled binary — so this is the
-       honest test. Connect first (step 2).</p>
-    <div class="row"><button id="btn-listen" class="ghost">Listen for 4 seconds</button></div>
-    <p id="listen-status" class="status"></p>
+    <summary>Check the cable</summary>
+    <p class="hint">For when the radio “does not answer”. Identifies the adapter, listens to the
+       cable at 38400 baud, asks the radio a harmless question, and only if bytes are arriving
+       that make no sense tries every other rate — then says which side to look at. It never
+       writes to the radio. Best with the radio in <strong>bootloader mode</strong> (off, hold
+       PTT, on): the radio then talks on its own, so the check can prove wiring, polarity and
+       baud rate at once. A terminal program shows that same chatter as gibberish even when all
+       is well, because it is scrambled binary — this reads it properly. Connect first (step 2).</p>
+    <div class="row">
+      <button id="btn-cable" class="ghost">Check the cable</button>
+      <button id="btn-loopback" class="ghost" title="Adapter only, no radio: short its TX pin to its RX pin first">Test the adapter alone</button>
+    </div>
+    <p id="cable-status" class="status"></p>
+    <pre id="cable-report" class="log" hidden></pre>
   </details>
 
   <details>
