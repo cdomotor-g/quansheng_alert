@@ -86,15 +86,30 @@ function installFakeRadio() {
 	let controller = null;
 	let broadcast = null;
 
-	const send = (payload) => {
-		if (controller) controller.enqueue(window.K5.frame(Uint8Array.from(payload)));
+	// The real radio does not checksum its replies: it puts 0xFFFF where the CRC
+	// belongs. Reproduce that faithfully, or these tests exercise a radio that
+	// does not exist. Bootloader frames keep a computed CRC - we have no capture
+	// of one to say otherwise, and the installer accepts either form - so both
+	// branches of the check get covered.
+	const blankCrc = (frame, len) => {
+		const key = window.K5.XOR_KEY;
+		frame[4 + len]     = 0xff ^ key[len % key.length];
+		frame[4 + len + 1] = 0xff ^ key[(len + 1) % key.length];
+		return frame;
+	};
+
+	const send = (payload, realCrc = false) => {
+		if (!controller) return;
+		const bytes = Uint8Array.from(payload);
+		const frame = window.K5.frame(bytes);
+		controller.enqueue(realCrc ? frame : blankCrc(frame, bytes.length));
 	};
 
 	const startBroadcast = () => {
 		clearInterval(broadcast);
 		broadcast = setInterval(() => {
 			if (radio.mode === 'boot')
-				send([0x18, 0x05, 0x20, 0x00, 0x01, 0x02, 0x02, ...new Array(0x1d).fill(0)]);
+				send([0x18, 0x05, 0x20, 0x00, 0x01, 0x02, 0x02, ...new Array(0x1d).fill(0)], true);
 			if (radio.mode === 'noise' && controller)      // a line sampled at the wrong rate
 				controller.enqueue(Uint8Array.from({ length: 20 }, () => Math.random() * 256));
 		}, 300);
@@ -114,11 +129,11 @@ function installFakeRadio() {
 		if (radio.mode === 'boot') {
 			if (cmd === 0x30) {                                  // version presented
 				radio.versionPresented = new TextDecoder().decode(payload.slice(4)).replace(/\0+$/, '');
-				send([0x18, 0x05, 0x20, 0x00, 0x01, 0x02, 0x02, ...new Array(0x1d).fill(0)]);
+				send([0x18, 0x05, 0x20, 0x00, 0x01, 0x02, 0x02, ...new Array(0x1d).fill(0)], true);
 			} else if (cmd === 0x19) {                           // flash block
 				const addr = (payload[8] << 8) | payload[9];
 				radio.flashed.set(addr, payload.slice(16, 16 + 0x100));
-				send([0x1a, 0x05, 0x08, 0x00, 0x8a, 0x8d, 0x9f, 0x1d, payload[8], payload[9], 0x00, 0x00]);
+				send([0x1a, 0x05, 0x08, 0x00, 0x8a, 0x8d, 0x9f, 0x1d, payload[8], payload[9], 0x00, 0x00], true);
 			}
 			return;
 		}
@@ -127,7 +142,7 @@ function installFakeRadio() {
 			const v = new TextEncoder().encode(radio.version);
 			const body = new Uint8Array(16);
 			body.set(v.subarray(0, 16));
-			send([0x18, 0x05, 0x10, 0x00, ...body]);
+			send([0x15, 0x05, 0x10, 0x00, ...body]);             // 0x15, not 0x18
 		} else if (cmd === 0x1b) {                               // read EEPROM
 			const addr = payload[4] | (payload[5] << 8);
 			const len  = payload[6];

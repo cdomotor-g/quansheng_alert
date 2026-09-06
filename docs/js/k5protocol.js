@@ -12,8 +12,12 @@
 // `len` counts the payload only; the two CRC bytes sit inside the obfuscated
 // section but outside the length. Every payload starts with a command byte.
 //
+// The radio does not checksum what it sends: every reply carries 0xFFFF in
+// place of a CRC. Only what we transmit is checksummed for real, so a received
+// 0xFFFF means "not supplied" rather than "corrupt". See deframe().
+//
 // Normal mode (radio switched on the usual way, firmware running):
-//   0x14 hello            -> 0x18 reply carrying the firmware version at [4..]
+//   0x14 hello            -> 0x15 reply carrying the firmware version at [4..]
 //   0x1b read EEPROM      -> 0x1c reply, data at [8..], max 0x80 bytes a time
 //   0x1d write EEPROM     -> 0x1e reply
 //   0xdd reset the radio   (no reply)
@@ -63,6 +67,9 @@ const K5 = (() => {
 	const SOF = Uint8Array.of(0xab, 0xcd);
 	const EOF = Uint8Array.of(0xdc, 0xba);
 
+	// What the radio puts where a checksum should go.
+	const NO_CRC = 0xffff;
+
 	function frame(payload) {
 		const sum  = crc16(payload);
 		const body = new Uint8Array(payload.length + 2);
@@ -108,7 +115,10 @@ const K5 = (() => {
 			const body    = xorCopy(buffer.subarray(at + 4, at + total - 2));
 			const payload = body.subarray(0, len);
 			const want    = body[len] | (body[len + 1] << 8);
-			packets.push({ payload, crcOk: crc16(payload) === want });
+			// The radio sends 0xFFFF instead of computing a checksum, so treat
+			// that as "not supplied" and accept the packet. Any other mismatch
+			// is still real corruption and is reported as such.
+			packets.push({ payload, crcOk: want === NO_CRC || crc16(payload) === want });
 			at += total;
 		}
 
@@ -270,7 +280,7 @@ const K5 = (() => {
 	}
 
 	return {
-		XOR_KEY, SESSION, FLASH_LIMIT, VERSION_OFFSET, VERSION_LENGTH,
+		XOR_KEY, SESSION, FLASH_LIMIT, VERSION_OFFSET, VERSION_LENGTH, NO_CRC,
 		crc16, frame, deframe, cmd,
 		readImage, checkImage, versionString, fwXor, isPacked,
 	};

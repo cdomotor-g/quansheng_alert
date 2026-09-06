@@ -70,6 +70,9 @@ def frame(payload):
     return b'\xab\xcd' + len(payload).to_bytes(2, 'little') + body + b'\xdc\xba'
 
 
+NO_CRC = 0xffff        # what the radio puts where a checksum should go
+
+
 def deframe(buf):
     """Pull complete packets out of a byte buffer.
 
@@ -97,7 +100,9 @@ def deframe(buf):
         body = xor(buf[at + 4:at + total - 2])
         payload = body[:length]
         want = body[length] | (body[length + 1] << 8)
-        packets.append((payload, crc16(payload) == want))
+        # The radio sends 0xFFFF instead of computing a checksum, so treat that
+        # as "not supplied". Any other mismatch is real corruption.
+        packets.append((payload, want == NO_CRC or crc16(payload) == want))
         at += total
     return packets, buf[at:]
 
@@ -328,12 +333,14 @@ def check_hello(port, attempts=3):
                 continue
             packets, pending = deframe(pending + chunk)
             for payload, ok in packets:
-                if not ok or payload[0] != 0x18:
-                    continue
+                # A radio in the bootloader answers no hello, it only beacons -
+                # so say that plainly rather than time out with nothing.
                 if is_bootloader_beacon(payload):
                     verdict('The radio is in bootloader mode, which cannot report a version. '
                             'Switch it off and on normally and ask again.')
                     return None
+                if not ok or payload[0] != 0x15:
+                    continue
                 version = payload[4:20].split(b'\0')[0].decode('ascii', 'replace')
                 verdict(f'The radio answered: it is running "{version}". The cable works in '
                         'both directions and the baud rate is right.')

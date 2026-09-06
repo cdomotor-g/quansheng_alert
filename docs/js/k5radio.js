@@ -241,10 +241,19 @@ class K5Radio {
 	// ---- normal mode -------------------------------------------------------
 
 	// Returns the running firmware version, e.g. "2.01.26" or "*ALERTRX 02f24b1".
+	//
+	// The reply to a hello is 0x15. A radio in the bootloader never sends one -
+	// it only broadcasts 0x18 - so rather than let that end in a bare timeout,
+	// check for a beacon before giving up and say what is actually wrong.
 	async hello(timeoutMs = 1200) {
-		const reply = await this.request(K5.cmd.hello(), 0x18, timeoutMs, 2);
-		if (K5Radio.isBootloaderBroadcast(reply))
-			throw new Error('The radio is in bootloader mode, which cannot report a firmware version.');
+		let reply;
+		try {
+			reply = await this.request(K5.cmd.hello(), 0x15, timeoutMs, 2);
+		} catch (err) {
+			if (this.queue.some(p => K5Radio.isBootloaderBroadcast(p)))
+				throw new Error('The radio is in bootloader mode, which cannot report a firmware version.');
+			throw err;
+		}
 		const version = K5.versionString(reply.subarray(4, 20));
 		if (!/^[\x20-\x7e]+$/.test(version))
 			throw new Error('The radio answered with something that is not a version string.');
