@@ -231,10 +231,18 @@ async function connect() {
 	// Work out what state the radio is in, so the wizard can say something useful.
 	say('connect-status', 'Connected. Asking the radio what it is…', 'busy');
 	if (await radio.inBootloader(1200)) {
-		say('connect-status',
-			'Connected — the radio is already in bootloader mode. That means it cannot be backed up ' +
-			'(the backup needs the radio switched on normally). Either switch it off and on normally and ' +
-			'press "Back up my radio", or tick "skip this" to go straight to installing.', 'ok');
+		// It has broadcast its version, so say straight away if this is not a
+		// radio the firmware runs on, rather than letting them reach step 4 first.
+		const info = showCompatibility(radio.bootloaderInfo());
+		if (info && !info.ok) {
+			say('connect-status', `Connected, and the radio is in bootloader mode. ${info.summary} ` +
+				'See the warning in step 4 before going any further.', 'bad');
+		} else {
+			say('connect-status',
+				'Connected — the radio is already in bootloader mode. That means it cannot be backed up ' +
+				'(the backup needs the radio switched on normally). Either switch it off and on normally and ' +
+				'press "Back up my radio", or tick "skip this" to go straight to installing.', 'ok');
+		}
 		log('Radio detected in bootloader mode.');
 		unlock(2);
 		return;
@@ -305,6 +313,32 @@ async function backup() {
 
 // ---------------------------------------------------------- step 4: flash ---
 
+const OVERRIDE_PHRASE = 'FLASH ANYWAY';
+
+// Show what the bootloader says about itself. Returns the classification so the
+// caller can decide; showing it is not the same as allowing it.
+function showCompatibility(info) {
+	const box = $('compat-block');
+	if (!info || info.ok) { box.hidden = true; return info; }
+	box.hidden = false;
+	box.classList.toggle('bad', info.level === 'incompatible');
+	$('compat-summary').textContent = info.summary;
+	$('compat-detail').textContent  = info.detail || '';
+	if (info.link) {
+		$('compat-link-wrap').hidden = false;
+		$('compat-link').href = info.link;
+		$('compat-link').textContent = info.link.replace(/^https:\/\/github\.com\//, '');
+	} else {
+		$('compat-link-wrap').hidden = true;
+	}
+	log(`Bootloader compatibility: ${info.level} — ${info.summary}`);
+	return info;
+}
+
+function overrideGiven() {
+	return $('compat-override').value.trim().toUpperCase() === OVERRIDE_PHRASE;
+}
+
 async function flash() {
 	if (!state.image) { say('flash-status', 'Pick a firmware in step 1 first.', 'bad'); return; }
 	if (!state.radio) { say('flash-status', 'Connect to the radio first (step 2).', 'bad'); return; }
@@ -326,6 +360,25 @@ async function flash() {
 					'stay blank. Then press Install again.', 'bad');
 				return;
 			}
+		}
+
+		// The radio is in bootloader mode, so it has told us what it is. This is
+		// the last moment anything can be known about the hardware before we
+		// start writing to its flash.
+		const info = showCompatibility(state.radio.bootloaderInfo());
+		if (info && !info.ok) {
+			if (!overrideGiven()) {
+				say('flash-status',
+					`${info.summary} Nothing has been written to the radio. ` +
+					(info.level === 'incompatible'
+						? 'Installing this would leave it unable to start. '
+						: 'Check the label under the battery before going further. ') +
+					'If you are certain this is wrong, open "Install it anyway" above and type the ' +
+					`phrase ${OVERRIDE_PHRASE}.`, 'bad');
+				log(`Flash refused: bootloader ${info.version || '(unreadable)'} is ${info.level}.`);
+				return;
+			}
+			log(`Compatibility check OVERRIDDEN by the user for bootloader ${info.version}.`);
 		}
 
 		log(`Flashing ${state.imageName} (${state.image.raw.length} bytes)…`);

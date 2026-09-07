@@ -91,6 +91,11 @@ body {
 #btn-release   { margin-left: auto; }
 button.small   { padding: 4px 10px; font-size: 0.9rem; }
 
+.compat { margin: 10px 0; }
+.compat.bad { background: var(--badbg); border-left-color: var(--bad); }
+.compat input { width: 100%; max-width: 260px; padding: 6px 8px; margin-top: 6px;
+                border: 1px solid var(--line); border-radius: 6px; }
+
 .step.locked { opacity: 0.45; pointer-events: none; }
 .step.locked .num { background: var(--muted); }
 .step.done .num { background: var(--ok); }

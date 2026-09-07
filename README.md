@@ -229,9 +229,33 @@ other builds and come back if you return to this one.
 ### Which radio is this for?
 
 The original **DP32G030 + BK4819** hardware: UV-K5, UV-K5(8), UV-K6, UV-5R Plus — the
-one with the `M`/`A` … `EXIT`/`D` keypad. The newer **UV-K5 "V3" / UV-K1** use a
-different microcontroller and need a different firmware line; the installer will not
-damage one, but the firmware will not run on it.
+one with the `M`/`A` … `EXIT`/`D` keypad.
+
+> [!WARNING]
+> **Not for the UV-K5 “V3” or UV-K1.** Those use a **PY32F071** microcontroller, not
+> the DP32G030. This firmware cannot run on them: installing it leaves a radio that
+> will not start. Use
+> [armel/uv-k1-k5v3-firmware-custom](https://github.com/armel/uv-k1-k5v3-firmware-custom)
+> instead.
+>
+> **How to tell:** take the battery off and read the label.
+>
+> | | V1 — supported | V3 — **not** supported |
+> |---|---|---|
+> | Label | no version marking | **`V3`** printed beside the barcode |
+> | Model | `UV-K5`, `UV-K5(8)`, `UV-K6`, `UV-5R Plus` | often `UV-K5(99)` |
+> | Bootloader version | `2.x` | `7.x` |
+> | Stock firmware | `2.01.26` and similar | `7.x` |
+>
+> A V3 speaks the same serial protocol as a V1 — it will connect, answer, and back up
+> perfectly normally — which is exactly what makes it look flashable. The version
+> numbers are the giveaway. The installer now reads the bootloader version out of the
+> radio's own broadcast and refuses to flash anything that is not `2.x`; an unrecognised
+> version warns instead of blocking, and either can be overridden deliberately.
+
+Nothing here can damage a V3 — the installer stops before writing, and even an
+overridden install leaves the bootloader intact, so the radio still enters bootloader
+mode and can be re-flashed with firmware that suits it.
 
 <details>
 <summary>Doing it by hand instead (or from Linux without a browser)</summary>

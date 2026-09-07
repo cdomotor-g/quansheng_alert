@@ -122,7 +122,7 @@ function installFakeRadio() {
 		clearInterval(broadcast);
 		broadcast = setInterval(() => {
 			if (radio.mode === 'boot')
-				send(REAL_BEACON, 'boot');
+				send(radio.beacon, 'boot');
 			if (radio.mode === 'noise' && controller)      // a line sampled at the wrong rate
 				controller.enqueue(Uint8Array.from({ length: 20 }, () => Math.random() * 256));
 		}, 300);
@@ -142,7 +142,7 @@ function installFakeRadio() {
 		if (radio.mode === 'boot') {
 			if (cmd === 0x30) {                                  // version presented
 				radio.versionPresented = new TextDecoder().decode(payload.slice(4)).replace(/\0+$/, '');
-				send(REAL_BEACON, 'boot');
+				send(radio.beacon, 'boot');
 			} else if (cmd === 0x19) {                           // flash block
 				const addr = (payload[8] << 8) | payload[9];
 				radio.flashed.set(addr, payload.slice(16, 16 + 0x100));
@@ -217,6 +217,17 @@ function installFakeRadio() {
 		removeEventListener(type, fn) {
 			this._listeners[type] = (this._listeners[type] || []).filter(f => f !== fn);
 		},
+	};
+
+	// A stock 2.00.06 beacon: same shape, different device bytes and version.
+	// Used to prove the compatibility guard still lets real DP32G030 radios through.
+	const STOCK_BEACON = [
+		0x18, 0x05, 0x20, 0x00, 0x01, 0x02, 0x02, 0x06, 0x1c, 0x53, 0x50, 0x4b,
+		0x4c, 0x5d, 0x02, 0xc1, 0x22, 0x87, 0x73, 0xdb, 0x32, 0x2e, 0x30, 0x30,
+		0x2e, 0x30, 0x36, 0x00, 0, 0, 0, 0, 0, 0, 0, 0];
+	radio.beacon = STOCK_BEACON;                       // 2.00.06 unless a test says otherwise
+	window.__setBeacon = (which) => {
+		radio.beacon = which === 'v3' ? REAL_BEACON : STOCK_BEACON;
 	};
 
 	// let the test pull the plug
@@ -330,6 +341,33 @@ try {
 	check('the backup file is named for the date', /^uvk5-backup-[\d-]+\.bin$/.test(download.suggestedFilename()),
 	      download.suggestedFilename());
 
+	// --- the compatibility guard: a 7.x bootloader is different silicon
+	//     (UV-K5 V3 / UV-K1, PY32F071) and must be refused before any write.
+	await page.evaluate(() => { window.__setBeacon('v3'); window.__setMode('boot'); });
+	await page.locator('#btn-flash').click();
+	await page.waitForFunction(
+		() => /not a radio this firmware runs on/i.test(document.getElementById('flash-status').textContent),
+		null, { timeout: 20000 });
+	check('a 7.x bootloader blocks the flash', true);
+	check('nothing was written to the incompatible radio',
+	      await page.evaluate(() => window.__radio.flashed.size === 0));
+	const compatDetail = await page.locator('#compat-detail').textContent();
+	check('the warning names the V3 / PY32F071 cause',
+	      /PY32F071/.test(compatDetail) && /V3/.test(compatDetail), compatDetail);
+	const compatLink = await page.locator('#compat-link').getAttribute('href');
+	check('the warning points at the correct project',
+	      /armel\/uv-k1-k5v3-firmware-custom/.test(compatLink || ''), String(compatLink));
+
+	// the override must not be a single click
+	check('an empty or wrong override phrase does not unlock',
+	      await page.evaluate(() => { document.getElementById('compat-override').value = 'yes'; return !window.overrideGiven(); }));
+	check('the exact phrase does unlock',
+	      await page.evaluate(() => { document.getElementById('compat-override').value = 'flash anyway'; return window.overrideGiven(); }));
+	await page.evaluate(() => { document.getElementById('compat-override').value = ''; });
+
+	// back to a supported 2.x radio for the normal path
+	await page.evaluate(() => { window.__setBeacon('stock'); window.__setMode('normal'); });
+
 	// --- step 4: flashing waits for bootloader mode, then writes the image
 	await page.locator('#btn-flash').click();
 	await page.waitForFunction(() => document.getElementById('flash-status').textContent.includes('Waiting for the radio'), null, { timeout: 5000 });
@@ -395,6 +433,20 @@ try {
 	const loop = await page.locator('#cable-status').textContent();
 	check('a shorted adapter echoes the loopback probe', /echoed the test string/.test(loop), loop);
 	await page.evaluate(() => window.__setMode('normal'));
+
+	// --- the override, end to end: typing the phrase really does let it through,
+	//     so the guard is a stop that can be lifted deliberately, not a wall.
+	await page.evaluate(() => {
+		window.__radio.flashed.clear();
+		document.getElementById('flash-status').textContent = '';   // else the last run's "Installed" is still there
+		document.getElementById('compat-override').value = 'FLASH ANYWAY';
+		window.__setBeacon('v3');
+		window.__setMode('boot');
+	});
+	await page.locator('#btn-flash').click();
+	await page.waitForFunction(() => window.__radio.flashed.size > 0, null, { timeout: 60000 });
+	check('the typed override lets a deliberate install through', true);
+	await page.evaluate(() => { window.__setBeacon('stock'); window.__setMode('normal'); });
 
 	check('no JavaScript errors on the page', errors.length === 0, errors.join('\n        '));
 } catch (err) {

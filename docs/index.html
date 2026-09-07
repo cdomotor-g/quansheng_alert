@@ -145,6 +145,21 @@
         blank. That’s bootloader mode. Let go of PTT.</li>
   </ol>
   <div class="row">
+    <div id="compat-block" class="warn compat" hidden>
+      <p><strong id="compat-summary"></strong></p>
+      <p id="compat-detail"></p>
+      <p id="compat-link-wrap" hidden>Correct project for that radio:
+         <a id="compat-link" href="#" target="_blank" rel="noopener noreferrer"></a></p>
+      <details>
+        <summary>Install it anyway</summary>
+        <p class="hint">Only if you are certain the check is wrong. On genuinely
+           incompatible hardware this produces a radio that will not start — it stays
+           re-flashable in bootloader mode, but it will not boot until the right
+           firmware is put on it. Type <strong>FLASH ANYWAY</strong> to unlock.</p>
+        <input id="compat-override" type="text" autocomplete="off" spellcheck="false"
+               placeholder="type FLASH ANYWAY">
+      </details>
+    </div>
     <button id="btn-flash" class="primary">Install firmware now</button>
   </div>
   <div class="progress" id="flash-progress" hidden><div class="bar"></div></div>

@@ -35,6 +35,7 @@ class K5Radio {
 		this.onLost  = null;        // called if the cable is pulled
 		this.stats   = { bytes: 0, packets: 0, badCrc: 0, beacons: 0 };   // since connect
 		this._capture = null;       // raw bytes being collected for listen()
+		this.lastBeacon = null;     // most recent bootloader broadcast, for identifying the radio
 	}
 
 	static get supported() {
@@ -158,6 +159,7 @@ class K5Radio {
 		this.buffer  = new Uint8Array(0);
 		this.stats   = { bytes: 0, packets: 0, badCrc: 0, beacons: 0 };
 		this._capture = null;
+		this.lastBeacon = null;
 		this.reading = false;
 		this._rejectAll(new Error('Disconnected.'));
 	}
@@ -210,7 +212,10 @@ class K5Radio {
 			// for real; that is the same trade-off k5prog makes.
 			if (!pkt.crcOk) this.stats.badCrc++;
 			this.stats.packets++;
-			if (K5Radio.isBootloaderBroadcast(pkt.payload)) this.stats.beacons++;
+			if (K5Radio.isBootloaderBroadcast(pkt.payload)) {
+				this.stats.beacons++;
+				this.lastBeacon = pkt.payload;
+			}
 			// hand it straight to a waiter if one matches, else queue it
 			const idx = this.waiters.findIndex(w => w.want === null || w.want === pkt.payload[0]);
 			if (idx >= 0) {
@@ -351,6 +356,63 @@ class K5Radio {
 	// identifier, not a protocol marker.
 	static isBootloaderBroadcast(p) {
 		return p[0] === 0x18 && p.length >= 7 && p[2] === 0x20 && p[3] === 0x00;
+	}
+
+	// ---- identifying the radio before writing to it ------------------------
+	//
+	// The beacon carries the bootloader's own version as ASCII at a fixed
+	// offset. Confirmed on two lineages: a stock 2.00.06 beacon and a 7.00.07
+	// one captured from hardware. This is the ONLY model evidence available at
+	// flashing time, because a bootloader answers no hello - so the running
+	// firmware version cannot be asked for once the radio is in this mode.
+	//
+	// Note this is read passively, out of a broadcast the radio sends unasked.
+	// The 0x30 command is not an enquiry - it presents OUR version TO the
+	// bootloader as the first step of flashing, so using it to identify a radio
+	// would mean starting the flash before deciding whether flashing is safe.
+	static bootloaderVersion(payload) {
+		if (!payload || !K5Radio.isBootloaderBroadcast(payload)) return '';
+		return K5.versionString(payload.subarray(20, 28));
+	}
+
+	// Which silicon a bootloader lineage implies. Getting this wrong in the
+	// permissive direction writes DP32G030 code to a radio that cannot run it.
+	static classifyBootloader(version) {
+		if (/^2\./.test(version))
+			return {
+				ok: true, level: 'supported',
+				summary: `Bootloader ${version} — DP32G030 hardware, which this firmware is built for.`,
+			};
+
+		if (/^7\./.test(version))
+			return {
+				ok: false, level: 'incompatible',
+				summary: `Bootloader ${version} — this is NOT a radio this firmware runs on.`,
+				detail:
+					`The radio reports bootloader ${version}. That is the UV-K5 “V3” / UV-K1 line, which uses a ` +
+					'PY32F071 microcontroller. This firmware is built for the DP32G030 (UV-K5, UV-K5(8), UV-K6, ' +
+					'UV-5R Plus) and cannot run on it — installing it would leave the radio unable to start. ' +
+					'Check the label under the battery: a V3 says “V3” beside the barcode, often with a model ' +
+					'like UV-K5(99). The project for that radio is armel/uv-k1-k5v3-firmware-custom.',
+				link: 'https://github.com/armel/uv-k1-k5v3-firmware-custom',
+			};
+
+		return {
+			ok: false, level: 'unknown',
+			summary: `Bootloader ${version || '(unreadable)'} — not one this installer recognises.`,
+			detail:
+				`The radio reports bootloader ${version || 'nothing readable'}. Every radio this firmware is ` +
+				'known to run on reports 2.x. This may simply be a variant nobody has catalogued yet, or it may ' +
+				'be different hardware. Check the label under the battery: if it says “V3”, or the microcontroller ' +
+				'is a PY32F071 rather than a DP32G030, this firmware will not run on it.',
+		};
+	}
+
+	// What we know about the attached radio, or null if it has not beaconed.
+	bootloaderInfo() {
+		if (!this.lastBeacon) return null;
+		const version = K5Radio.bootloaderVersion(this.lastBeacon);
+		return { version, ...K5Radio.classifyBootloader(version) };
 	}
 
 	async inBootloader(timeoutMs = 1500) {
