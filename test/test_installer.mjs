@@ -186,13 +186,29 @@ function installFakeRadio() {
 		async close() {
 			radio.opened = false;
 			clearInterval(broadcast);
+			// A real browser does not reject when something still holds a lock -
+			// it simply never settles, which is what used to freeze the page.
+			// Model that exactly, on demand.
+			if (radio.hangOnClose) return new Promise(() => {});
 			if (this.readable.locked || this.writable.locked) throw new DOMException('port is locked', 'InvalidStateError');
 			controller = null;
 			this.readable = null;
 			this.writable = null;
 		},
 		getInfo() { return { usbVendorId: 0x1a86, usbProductId: 0x7523 }; },
+
+		// Real SerialPorts are EventTargets and fire 'disconnect' when the
+		// device goes away.
+		_listeners: {},
+		addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); },
+		removeEventListener(type, fn) {
+			this._listeners[type] = (this._listeners[type] || []).filter(f => f !== fn);
+		},
 	};
+
+	// let the test pull the plug
+	window.__unplug = () => { for (const f of port._listeners.disconnect || []) f({ type: 'disconnect' }); };
+	window.__hangOnClose = (on) => { radio.hangOnClose = on; };
 
 	Object.defineProperty(navigator, 'serial', {
 		configurable: true,
@@ -238,6 +254,41 @@ try {
 	await page.locator('#btn-connect').click();
 	await page.waitForFunction(() => document.getElementById('connect-status').textContent.includes('2.01.26'), null, { timeout: 5000 });
 	check('the running firmware version is read back', true);
+
+	// --- the port is single-access, so holding it must be visible, releasable
+	//     from anywhere on the page, and undoable without a reload.
+	check('the sticky port bar shows while the port is held',
+	      await page.locator('#portbar').isVisible());
+
+	await page.locator('#btn-release').click();
+	await page.waitForFunction(() => document.getElementById('portbar').hidden, null, { timeout: 5000 });
+	check('releasing from the sticky bar actually closes the port',
+	      await page.evaluate(() => !window.__radio.opened));
+
+	await page.locator('#btn-connect').click();
+	await page.waitForFunction(() => document.getElementById('connect-status').textContent.includes('2.01.26'), null, { timeout: 8000 });
+	check('the radio reconnects without reloading the page', true);
+
+	// The freeze the user hit: a close() that never settles must not take the
+	// page with it.
+	await page.evaluate(() => window.__hangOnClose(true));
+	const releaseStart = Date.now();
+	await page.locator('#btn-release').click();
+	await page.waitForFunction(() => document.getElementById('portbar').hidden, null, { timeout: 15000 });
+	const releaseMs = Date.now() - releaseStart;
+	check('a close() that never returns still frees the UI', releaseMs < 12000, `took ${releaseMs} ms`);
+	await page.evaluate(() => window.__hangOnClose(false));
+
+	// Pulling the cable must not strand the UI in "connected".
+	await page.locator('#btn-connect').click();
+	await page.waitForFunction(() => !document.getElementById('portbar').hidden, null, { timeout: 8000 });
+	await page.evaluate(() => window.__unplug());
+	await page.waitForFunction(() => document.getElementById('portbar').hidden, null, { timeout: 5000 });
+	check('unplugging the cable resets the connection state', true);
+
+	// back to a good connection for everything that follows
+	await page.locator('#btn-connect').click();
+	await page.waitForFunction(() => document.getElementById('connect-status').textContent.includes('2.01.26'), null, { timeout: 8000 });
 
 	// --- toolbox: checking the cable with a radio that is on normally ends in a hello
 	const cableCheck = async (timeout = 15000) => {

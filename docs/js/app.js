@@ -190,7 +190,22 @@ function acceptImage(bytes, name, meta = null) {
 
 // -------------------------------------------------------- step 2: connect ---
 
+// A serial port can only be open in one place at a time, so whether this page
+// is holding it has to be visible from anywhere on the page and impossible for
+// two bits of UI to disagree about. Everything goes through here.
+function setConnected(on, note) {
+	$('btn-connect').hidden    = on;
+	$('btn-disconnect').hidden = !on;
+	$('portbar').hidden        = !on;
+	$('portbar').classList.toggle('busy', !!note);
+	$('portbar-text').textContent = note || 'Serial port held by this page';
+}
+
 async function connect() {
+	if (state.radio && state.radio.connected) {
+		say('connect-status', 'Already connected. Use "Release port" if you want to hand it back.', 'ok');
+		return;
+	}
 	const radio = new K5Radio(log);
 	try {
 		say('connect-status', 'Choose the cable in the browser pop-up…', 'busy');
@@ -208,12 +223,10 @@ async function connect() {
 	state.radio = radio;
 	radio.onLost = () => {
 		say('connect-status', 'The cable was unplugged.', 'bad');
-		$('btn-connect').hidden = false;
-		$('btn-disconnect').hidden = true;
 		state.radio = null;
+		setConnected(false);
 	};
-	$('btn-connect').hidden = true;
-	$('btn-disconnect').hidden = false;
+	setConnected(true);
 
 	// Work out what state the radio is in, so the wizard can say something useful.
 	say('connect-status', 'Connected. Asking the radio what it is…', 'busy');
@@ -240,12 +253,28 @@ async function connect() {
 	unlock(2);
 }
 
+// Hand the port back. Every step inside disconnect() is capped, so this always
+// finishes and the page always ends up usable - even if the browser will not
+// let go of the port, which is worth saying out loud rather than looking hung.
 async function disconnect() {
-	if (state.radio) await state.radio.disconnect();
-	state.radio = null;
-	$('btn-connect').hidden = false;
-	$('btn-disconnect').hidden = true;
-	say('connect-status', 'Disconnected.');
+	if (state.releasing) return;
+	state.releasing = true;
+	const radio = state.radio;
+	$('btn-disconnect').disabled = true;
+	$('btn-release').disabled = true;
+	setConnected(true, 'Releasing the serial port…');
+	try {
+		if (radio) await radio.disconnect();
+		say('connect-status', 'Disconnected. The port is free for other programs.');
+	} catch (err) {
+		say('connect-status', `Released, but the browser reported: ${err.message}`, 'bad');
+	} finally {
+		state.radio = null;
+		state.releasing = false;
+		$('btn-disconnect').disabled = false;
+		$('btn-release').disabled = false;
+		setConnected(false);
+	}
 }
 
 // --------------------------------------------------------- step 3: backup ---
@@ -655,6 +684,7 @@ async function init() {
 
 	on('btn-connect',    'click', connect);
 	on('btn-disconnect', 'click', disconnect);
+	on('btn-release',    'click', disconnect);
 	on('btn-backup',     'click', backup);
 	on('btn-flash',      'click', flash);
 	on('btn-identify',   'click', identify);

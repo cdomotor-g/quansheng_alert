@@ -75,6 +75,22 @@ body {
 }
 
 /* a step that isn't reachable yet is dimmed and inert */
+/* Sticky so the port can always be released, however far down the page we are. */
+#portbar {
+	position: sticky; top: 0; z-index: 20;
+	background: var(--okbg); border-bottom: 1px solid var(--line);
+}
+.portbar-inner { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+#portbar .dot {
+	width: 9px; height: 9px; border-radius: 50%;
+	background: var(--ok); flex: none;
+}
+#portbar.busy  { background: var(--warnbg); }
+#portbar.busy  .dot { background: var(--warn); }
+#portbar-text  { color: var(--ink); font-size: 0.95rem; }
+#btn-release   { margin-left: auto; }
+button.small   { padding: 4px 10px; font-size: 0.9rem; }
+
 .step.locked { opacity: 0.45; pointer-events: none; }
 .step.locked .num { background: var(--muted); }
 .step.done .num { background: var(--ok); }

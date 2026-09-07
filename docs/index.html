@@ -19,6 +19,16 @@
   </div>
 </header>
 
+<!-- Always reachable, whatever the page is scrolled to: the port is a single-access
+     resource, so there must be somewhere to see that it is held and let it go. -->
+<div id="portbar" hidden>
+  <div class="wrap portbar-inner">
+    <span class="dot"></span>
+    <span id="portbar-text">Serial port held by this page</span>
+    <button id="btn-release" class="ghost small">Release port</button>
+  </div>
+</div>
+
 <main class="wrap">
 
 <!-- ───────────────────────────── browser check ───────────────────────────── -->

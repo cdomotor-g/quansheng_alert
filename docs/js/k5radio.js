@@ -8,6 +8,22 @@
 
 'use strict';
 
+// Web Serial teardown can wedge: port.close() waits forever if anything still
+// holds a lock on the streams, and a reader that is mid-read() only lets go
+// once it has been cancelled. Every close step is therefore capped - a port we
+// cannot shut down tidily is still better abandoned than left hanging, because
+// a hung close leaves the UI frozen AND the port held.
+function withTimeout(promise, ms, label) {
+	if (!promise || typeof promise.then !== 'function') return Promise.resolve();
+	let timer;
+	return Promise.race([
+		Promise.resolve(promise).finally(() => clearTimeout(timer)),
+		new Promise((_, reject) => {
+			timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms} ms`)), ms);
+		}),
+	]);
+}
+
 class K5Radio {
 	constructor(log = () => {}) {
 		this.port    = null;
@@ -36,11 +52,34 @@ class K5Radio {
 			throw new Error('This browser has no Web Serial support.');
 
 		this.port = await navigator.serial.requestPort();
+
+		// The device vanishing (cable pulled, radio's adapter re-enumerating)
+		// fires here even when no read is outstanding, so state cannot get
+		// stuck "connected" with nothing behind it.
+		this._onPortGone = () => {
+			this.log('The serial device disappeared.');
+			this.reading = false;
+			this._rejectAll(new Error('The cable was unplugged.'));
+			if (this.onLost) this.onLost(new Error('The cable was unplugged.'));
+		};
+		try { this.port.addEventListener('disconnect', this._onPortGone); } catch { /* older impls */ }
+
 		await this._open(K5Radio.BAUD);
 	}
 
+	// Always safe to call, in any state, and never throws: the caller's UI must
+	// be able to get back to "not connected" no matter how wedged the port is.
 	async disconnect() {
-		await this._close();
+		try {
+			await this._close();
+		} catch (err) {
+			this.log(`Forced the port shut: ${err.message}`);
+		}
+		try {
+			if (this.port && this._onPortGone)
+				this.port.removeEventListener('disconnect', this._onPortGone);
+		} catch { /* ignore */ }
+		this._onPortGone = null;
 		this.port = null;
 		this.log('Serial port closed.');
 	}
@@ -64,10 +103,21 @@ class K5Radio {
 	}
 
 	async _open(baudRate) {
-		await this.port.open({
-			baudRate, dataBits: 8, stopBits: 1, parity: 'none',
-			bufferSize: 4096, flowControl: 'none',
-		});
+		try {
+			await this.port.open({
+				baudRate, dataBits: 8, stopBits: 1, parity: 'none',
+				bufferSize: 4096, flowControl: 'none',
+			});
+		} catch (err) {
+			// A serial port is single-access. Chrome reports another holder as a
+			// bare "Failed to open serial port.", which tells the user nothing,
+			// so name the cause they can actually act on.
+			if (err.name === 'InvalidStateError')
+				throw new Error('This page already has that port open.');
+			throw new Error(`${err.message} A serial port can only be open in one place at ` +
+				'a time - close CHIRP, any terminal window, and any other tab running this ' +
+				'installer, then try again.');
+		}
 		this.baud = baudRate;
 		this.log(`Serial port open at ${baudRate} baud.`);
 		this._loopDone = this._readLoop();
@@ -75,19 +125,40 @@ class K5Radio {
 
 	async _close() {
 		this.reading = false;
-		try {
-			if (this._reader) { await this._reader.cancel().catch(() => {}); }
-		} catch { /* ignore */ }
-		// let the read loop release its lock before closing, else close() rejects
+
+		// Cancel first: a reader parked in read() only releases its lock once
+		// the read resolves, and cancel() is what resolves it.
+		try { await withTimeout(this._reader?.cancel(), 500, 'reader.cancel()'); } catch { /* ignore */ }
+
+		// Then let the loop reach its own finally and release the lock.
 		if (this._loopDone) {
-			await Promise.race([this._loopDone, new Promise(r => setTimeout(r, 1000))]);
+			try { await withTimeout(this._loopDone, 1000, 'read loop'); } catch { /* ignore */ }
 			this._loopDone = null;
 		}
+
+		// Belt and braces: if the loop never got there, drop the lock by hand.
+		// Without this, close() below has something to wait on forever.
+		try { this._reader?.releaseLock(); } catch { /* already released */ }
+		this._reader = null;
+
 		try {
-			if (this.port) await this.port.close();
-		} catch { /* ignore */ }
-		this.queue = [];
-		this.buffer = new Uint8Array(0);
+			await withTimeout(this.port?.close(), 3000, 'port.close()');
+		} catch (err) {
+			// Report it rather than hanging. The port may linger until the tab
+			// closes, but the app stays usable and says so.
+			this.log(`The browser would not close the port cleanly (${err.message}).`);
+		}
+
+		this._resetState();
+	}
+
+	// Everything a fresh connection must not inherit.
+	_resetState() {
+		this.queue   = [];
+		this.buffer  = new Uint8Array(0);
+		this.stats   = { bytes: 0, packets: 0, badCrc: 0, beacons: 0 };
+		this._capture = null;
+		this.reading = false;
 		this._rejectAll(new Error('Disconnected.'));
 	}
 
