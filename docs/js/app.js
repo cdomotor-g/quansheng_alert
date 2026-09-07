@@ -508,7 +508,8 @@ async function checkCable() {
 		say('cable-status', `Listening at 38400 baud for ${secs} seconds…`, 'busy');
 		if (radio.baud !== K5Radio.BAUD) await radio.reopen(K5Radio.BAUD);
 		const r = await radio.listen(secs * 1000);
-		line(`Listened ${secs} s at 38400: ${r.bytes} bytes, ${r.packets} good packets, ${r.badCrc} bad checksums, ` +
+		line(`Listened ${secs} s at 38400: ${r.bytes} bytes, ${r.packets} packets framed, ` +
+		     `${r.badCrc} without a verifiable checksum (normal - the radio does not compute one), ` +
 		     `${r.beacons} bootloader beacons` + (r.sample.length ? `\n  first bytes: ${hexOf(r.sample)}` : ''));
 
 		if (r.beacons) {

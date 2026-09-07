@@ -86,30 +86,43 @@ function installFakeRadio() {
 	let controller = null;
 	let broadcast = null;
 
-	// The real radio does not checksum its replies: it puts 0xFFFF where the CRC
-	// belongs. Reproduce that faithfully, or these tests exercise a radio that
-	// does not exist. Bootloader frames keep a computed CRC - we have no capture
-	// of one to say otherwise, and the installer accepts either form - so both
-	// branches of the check get covered.
-	const blankCrc = (frame, len) => {
+	// A real bootloader beacon, captured verbatim off a radio whose bootloader
+	// reports 7.00.07. Its device bytes are 52 34 50, not the 01 02 02 of a
+	// stock 2.00.06 - which is exactly what beacon detection used to insist on.
+	const REAL_BEACON = [
+		0x18, 0x05, 0x20, 0x00, 0x52, 0x34, 0x50, 0x41, 0x14, 0x33, 0x33, 0x33,
+		0x56, 0x43, 0xa3, 0x00, 0x78, 0x47, 0x04, 0x56, 0x37, 0x2e, 0x30, 0x30,
+		0x2e, 0x30, 0x37, 0x00, 0x00, 0x00, 0xc4, 0x20, 0x00, 0x08, 0x00, 0x00];
+
+	// Put `value` in the CRC field of an already-framed packet, obfuscated the
+	// way the radio would send it.
+	const forceCrc = (frame, len, value) => {
 		const key = window.K5.XOR_KEY;
-		frame[4 + len]     = 0xff ^ key[len % key.length];
-		frame[4 + len + 1] = 0xff ^ key[(len + 1) % key.length];
+		frame[4 + len]     = (value & 0xff)        ^ key[len % key.length];
+		frame[4 + len + 1] = ((value >> 8) & 0xff) ^ key[(len + 1) % key.length];
 		return frame;
 	};
 
-	const send = (payload, realCrc = false) => {
+	// The radio never sends a checksum that verifies, and the two modes get it
+	// wrong differently. Reproduce both exactly, or these tests exercise a radio
+	// that does not exist:
+	//   'none' - 0xFFFF, what the firmware sends
+	//   'boot' - 0x6ed1, captured from the 7.00.07 bootloader
+	//   'real' - leave the computed CRC, so that branch stays covered too
+	const send = (payload, crc = 'none') => {
 		if (!controller) return;
 		const bytes = Uint8Array.from(payload);
 		const frame = window.K5.frame(bytes);
-		controller.enqueue(realCrc ? frame : blankCrc(frame, bytes.length));
+		if (crc === 'none') forceCrc(frame, bytes.length, 0xffff);
+		else if (crc === 'boot') forceCrc(frame, bytes.length, 0x6ed1);
+		controller.enqueue(frame);
 	};
 
 	const startBroadcast = () => {
 		clearInterval(broadcast);
 		broadcast = setInterval(() => {
 			if (radio.mode === 'boot')
-				send([0x18, 0x05, 0x20, 0x00, 0x01, 0x02, 0x02, ...new Array(0x1d).fill(0)], true);
+				send(REAL_BEACON, 'boot');
 			if (radio.mode === 'noise' && controller)      // a line sampled at the wrong rate
 				controller.enqueue(Uint8Array.from({ length: 20 }, () => Math.random() * 256));
 		}, 300);
@@ -129,11 +142,11 @@ function installFakeRadio() {
 		if (radio.mode === 'boot') {
 			if (cmd === 0x30) {                                  // version presented
 				radio.versionPresented = new TextDecoder().decode(payload.slice(4)).replace(/\0+$/, '');
-				send([0x18, 0x05, 0x20, 0x00, 0x01, 0x02, 0x02, ...new Array(0x1d).fill(0)], true);
+				send(REAL_BEACON, 'boot');
 			} else if (cmd === 0x19) {                           // flash block
 				const addr = (payload[8] << 8) | payload[9];
 				radio.flashed.set(addr, payload.slice(16, 16 + 0x100));
-				send([0x1a, 0x05, 0x08, 0x00, 0x8a, 0x8d, 0x9f, 0x1d, payload[8], payload[9], 0x00, 0x00], true);
+				send([0x1a, 0x05, 0x08, 0x00, 0x8a, 0x8d, 0x9f, 0x1d, payload[8], payload[9], 0x00, 0x00], 'real');
 			}
 			return;
 		}

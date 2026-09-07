@@ -12,9 +12,13 @@
 // `len` counts the payload only; the two CRC bytes sit inside the obfuscated
 // section but outside the length. Every payload starts with a command byte.
 //
-// The radio does not checksum what it sends: every reply carries 0xFFFF in
-// place of a CRC. Only what we transmit is checksummed for real, so a received
-// 0xFFFF means "not supplied" rather than "corrupt". See deframe().
+// The radio does not checksum what it sends, in either mode. The firmware puts
+// 0xFFFF where the CRC belongs; a 7.00.07 bootloader puts a fixed 0x6ed1 that
+// matches no CRC-16 variant over any span. Both were captured from hardware.
+// So `crcOk` on a received packet means "this happened to verify", almost
+// always false, and callers MUST NOT use it to discard anything - doing so made
+// a radio in bootloader mode invisible. Only what we transmit is checksummed
+// for real.
 //
 // Normal mode (radio switched on the usual way, firmware running):
 //   0x14 hello            -> 0x15 reply carrying the firmware version at [4..]
@@ -67,9 +71,6 @@ const K5 = (() => {
 	const SOF = Uint8Array.of(0xab, 0xcd);
 	const EOF = Uint8Array.of(0xdc, 0xba);
 
-	// What the radio puts where a checksum should go.
-	const NO_CRC = 0xffff;
-
 	function frame(payload) {
 		const sum  = crc16(payload);
 		const body = new Uint8Array(payload.length + 2);
@@ -115,10 +116,9 @@ const K5 = (() => {
 			const body    = xorCopy(buffer.subarray(at + 4, at + total - 2));
 			const payload = body.subarray(0, len);
 			const want    = body[len] | (body[len + 1] << 8);
-			// The radio sends 0xFFFF instead of computing a checksum, so treat
-			// that as "not supplied" and accept the packet. Any other mismatch
-			// is still real corruption and is reported as such.
-			packets.push({ payload, crcOk: want === NO_CRC || crc16(payload) === want });
+			// Reported honestly, for diagnostics only. Nothing may be dropped on
+			// it: the radio does not supply a checksum we can check (see above).
+			packets.push({ payload, crcOk: crc16(payload) === want });
 			at += total;
 		}
 
@@ -280,7 +280,7 @@ const K5 = (() => {
 	}
 
 	return {
-		XOR_KEY, SESSION, FLASH_LIMIT, VERSION_OFFSET, VERSION_LENGTH, NO_CRC,
+		XOR_KEY, SESSION, FLASH_LIMIT, VERSION_OFFSET, VERSION_LENGTH,
 		crc16, frame, deframe, cmd,
 		readImage, checkImage, versionString, fwXor, isPacked,
 	};

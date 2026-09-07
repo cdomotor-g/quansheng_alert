@@ -200,7 +200,15 @@ class K5Radio {
 		this.buffer = rest.length > 4096 ? rest.subarray(rest.length - 4096) : rest;
 
 		for (const pkt of packets) {
-			if (!pkt.crcOk) { this.stats.badCrc++; this.log('Ignored a packet with a bad checksum.'); continue; }
+			// The radio never supplies a checksum we can verify. The firmware
+			// sends 0xFFFF; the bootloader sends a fixed value matching no
+			// CRC-16 variant over any span (0x6ed1 on a 7.00.07 bootloader).
+			// Both were captured from real hardware. So the checksum is counted
+			// for diagnostics but never used to discard a packet - dropping on
+			// it meant a radio in bootloader mode was invisible, because every
+			// beacon it sent was binned. Only what we transmit is checksummed
+			// for real; that is the same trade-off k5prog makes.
+			if (!pkt.crcOk) this.stats.badCrc++;
 			this.stats.packets++;
 			if (K5Radio.isBootloaderBroadcast(pkt.payload)) this.stats.beacons++;
 			// hand it straight to a waiter if one matches, else queue it
@@ -336,9 +344,13 @@ class K5Radio {
 	// asked. So: clear the queue, then listen. Anything arriving unprompted is
 	// the bootloader. That test does not depend on the exact broadcast contents,
 	// which differ between bootloader versions.
+	// Identify it by its shape - command 0x18 carrying a 32-byte body - and not
+	// by its contents. It used to demand 01 02 02 at [4..6], which is what a
+	// stock 2.00.06 bootloader happens to put there; a 7.00.07 bootloader sends
+	// 52 34 50 and was therefore never recognised. Those bytes are a device
+	// identifier, not a protocol marker.
 	static isBootloaderBroadcast(p) {
-		return p[0] === 0x18 && p.length >= 7 &&
-		       p[2] === 0x20 && p[3] === 0x00 && p[4] === 0x01 && p[5] === 0x02 && p[6] === 0x02;
+		return p[0] === 0x18 && p.length >= 7 && p[2] === 0x20 && p[3] === 0x00;
 	}
 
 	async inBootloader(timeoutMs = 1500) {

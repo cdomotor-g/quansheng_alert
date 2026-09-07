@@ -70,9 +70,6 @@ def frame(payload):
     return b'\xab\xcd' + len(payload).to_bytes(2, 'little') + body + b'\xdc\xba'
 
 
-NO_CRC = 0xffff        # what the radio puts where a checksum should go
-
-
 def deframe(buf):
     """Pull complete packets out of a byte buffer.
 
@@ -100,9 +97,10 @@ def deframe(buf):
         body = xor(buf[at + 4:at + total - 2])
         payload = body[:length]
         want = body[length] | (body[length + 1] << 8)
-        # The radio sends 0xFFFF instead of computing a checksum, so treat that
-        # as "not supplied". Any other mismatch is real corruption.
-        packets.append((payload, want == NO_CRC or crc16(payload) == want))
+        # Reported honestly, for diagnostics only. The radio supplies no
+        # checksum we can verify (0xFFFF from the firmware, a fixed 0x6ed1 from
+        # a 7.00.07 bootloader), so nothing may be discarded on this.
+        packets.append((payload, crc16(payload) == want))
         at += total
     return packets, buf[at:]
 
@@ -112,8 +110,10 @@ def cmd_hello():
 
 
 def is_bootloader_beacon(p):
-    return (p[0] == 0x18 and len(p) >= 7 and p[2] == 0x20 and p[3] == 0x00
-            and p[4] == 0x01 and p[5] == 0x02 and p[6] == 0x02)
+    """Command 0x18 carrying a 32-byte body. Identified by shape, not contents:
+    the bytes at [4..6] are a device identifier (01 02 02 on a stock 2.00.06,
+    52 34 50 on a 7.00.07) and matching them missed whole families of radio."""
+    return p[0] == 0x18 and len(p) >= 7 and p[2] == 0x20 and p[3] == 0x00
 
 
 def ascii_run(data, minimum=4):
@@ -226,9 +226,10 @@ def listen(port, seconds, quiet=False):
         raw += chunk
         packets, pending = deframe(pending + chunk)
         for payload, ok in packets:
+            # A checksum that does not verify is counted, never a reason to
+            # ignore the packet - the radio does not compute one.
             if not ok:
                 bad += 1
-                continue
             good += 1
             if is_bootloader_beacon(payload):
                 beacon_times.append(time.monotonic())
@@ -246,7 +247,8 @@ def listen(port, seconds, quiet=False):
         'versions': sorted(versions),
     }
     if not quiet:
-        say(f'  {len(raw)} bytes in {seconds:g} s: {good} good packets, {bad} with a bad checksum, '
+        say(f'  {len(raw)} bytes in {seconds:g} s: {good} packets framed, {bad} without a '
+            f'verifiable checksum (normal - the radio does not compute one), '
             f'{len(beacon_times)} bootloader beacons')
         if raw:
             say(hexdump(raw))
