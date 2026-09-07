@@ -1,5 +1,16 @@
 # quansheng_alert — ALERT telemetry receiver firmware for the Quansheng UV-K5
 
+> **Got a UV-K5 “V3” or a UV-K1?** This repository is not for it. Those use a
+> **PY32F071** MCU and report a `7.x` bootloader; everything here is built for
+> the **DP32G030**. Go to
+> **[quansheng_alert_v3](https://github.com/cdomotor-g/quansheng_alert_v3)**
+> instead — the same ALERT receiver, ported onto the
+> [F4HWN V3 port](https://github.com/armel/uv-k1-k5v3-firmware-custom).
+>
+> Take the battery off and read the label: a V3 says `V3` beside the barcode and
+> is often model `UV-K5(99)`. The installer here checks the bootloader version
+> and refuses to flash a `7.x` radio.
+
 Custom firmware for the Quansheng UV-K5 / UV-K5(8) / UV-K6 family (DP32G030 MCU +
 BK4819 radio) that turns the handheld into a portable **ALERT flood-warning
 telemetry receiver**:
