@@ -1,15 +1,25 @@
 # quansheng_alert — ALERT telemetry receiver firmware for the Quansheng UV-K5
 
-> **Got a UV-K5 “V3” or a UV-K1?** This repository is not for it. Those use a
-> **PY32F071** MCU and report a `7.x` bootloader; everything here is built for
-> the **DP32G030**. Go to
-> **[quansheng_alert_v3](https://github.com/cdomotor-g/quansheng_alert_v3)**
-> instead — the same ALERT receiver, ported onto the
-> [F4HWN V3 port](https://github.com/armel/uv-k1-k5v3-firmware-custom).
+> ## ⚠️ This repository is archived and no longer maintained
 >
-> Take the battery off and read the label: a V3 says `V3` beside the barcode and
-> is often model `UV-K5(99)`. The installer here checks the bootloader version
-> and refuses to flash a `7.x` radio.
+> Development has moved to
+> **[quansheng_alert_v3](https://github.com/cdomotor-g/quansheng_alert_v3)**.
+>
+> **This does not mean the firmware here is broken.** The last release works, the
+> sources build, and the [web installer](https://cdomotor-g.github.io/quansheng_alert/)
+> still flashes a **DP32G030** radio. What stops is maintenance: no further fixes,
+> features or station-table refreshes will land here.
+>
+> **Which repository do you want?** Take the battery off and read the label.
+>
+> | Your radio | MCU | Where to go |
+> |---|---|---|
+> | UV-K5 / UV-K5(8) / UV-K6, bootloader `2.x` | DP32G030 | **here** (archived, still flashable) |
+> | UV-K5 `V3` / UV-K1, bootloader `7.x`, often `UV-K5(99)` | PY32F071 | **[quansheng_alert_v3](https://github.com/cdomotor-g/quansheng_alert_v3)** |
+>
+> Note that `quansheng_alert_v3` is a port to **different silicon** and cannot be
+> flashed onto a DP32G030 radio. If you have a `2.x` radio, this archived
+> repository is still the right source — fork it if you need changes.
 
 Custom firmware for the Quansheng UV-K5 / UV-K5(8) / UV-K6 family (DP32G030 MCU +
 BK4819 radio) that turns the handheld into a portable **ALERT flood-warning
