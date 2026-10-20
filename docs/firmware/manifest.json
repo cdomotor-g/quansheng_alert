@@ -1,6 +1,6 @@
 {
-  "generated": "2026-09-04 06:39 UTC",
-  "commit": "7f8f06b",
+  "generated": "2026-10-20 01:16 UTC",
+  "commit": "26f1f09",
   "builds": [
     {
       "id": "default",
@@ -8,18 +8,18 @@
       "description": "Wide Bay / Burnett and central Queensland: Mt Kanigan, Mt Glorious, Barcaldine.",
       "file": "firmware/quansheng-alert-default.packed.bin",
       "raw_file": "firmware/quansheng-alert-default.bin",
-      "size": 61018,
-      "raw_size": 61000,
-      "sha256": "6e1773184399fccae48d1c97f8367fca98256ec132f174400f26945b7a7062b2",
+      "size": 59926,
+      "raw_size": 59908,
+      "sha256": "c392ac9c527ccfac60e0eac5bc85a622a0d702d162c6ba36a989e1980886ffcc",
       "stations": 379,
       "addresses": 849,
-      "commit": "7f8f06b",
-      "built": "2026-09-04",
+      "commit": "26f1f09",
+      "built": "2026-10-20",
       "order": 10,
       "stations_from": {
         "repo": "cdomotor-g/MegaNet",
-        "commit": "9733b2a",
-        "date": "2026-09-04",
+        "commit": "6ef4965",
+        "date": "2026-10-19",
         "fingerprint": "73fd215"
       }
     },
@@ -29,18 +29,18 @@
       "description": "The Constitution Hill network: Brisbane, Ipswich, Logan, Gold and Sunshine Coasts.",
       "file": "firmware/quansheng-alert-constitution-hill.packed.bin",
       "raw_file": "firmware/quansheng-alert-constitution-hill.bin",
-      "size": 60978,
-      "raw_size": 60960,
-      "sha256": "67e529916fd0bf61a9a48ca2a8957b151be3213c774e778bb8284ced81dd6f10",
+      "size": 59698,
+      "raw_size": 59680,
+      "sha256": "58774db341671769bbf0c60e19f5efcbc5c62c13e1b7ee8028286149b463bed5",
       "stations": 403,
       "addresses": 922,
-      "commit": "7f8f06b",
-      "built": "2026-09-04",
+      "commit": "26f1f09",
+      "built": "2026-10-20",
       "order": 20,
       "stations_from": {
         "repo": "cdomotor-g/MegaNet",
-        "commit": "9733b2a",
-        "date": "2026-09-04",
+        "commit": "6ef4965",
+        "date": "2026-10-19",
         "fingerprint": "2512505"
       }
     }
