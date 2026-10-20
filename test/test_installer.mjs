@@ -355,8 +355,8 @@ try {
 	check('the warning names the V3 / PY32F071 cause',
 	      /PY32F071/.test(compatDetail) && /V3/.test(compatDetail), compatDetail);
 	const compatLink = await page.locator('#compat-link').getAttribute('href');
-	check('the warning points at the correct project',
-	      /armel\/uv-k1-k5v3-firmware-custom/.test(compatLink || ''), String(compatLink));
+	check('the warning points at the installer that handles that radio',
+	      /quansheng_alert_ALL\/flash\/\?radio=v3/.test(compatLink || ''), String(compatLink));
 
 	// the override must not be a single click
 	check('an empty or wrong override phrase does not unlock',

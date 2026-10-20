@@ -1,5 +1,11 @@
 # quansheng_alert — ALERT telemetry receiver firmware for the Quansheng UV-K5
 
+> ### Setting up a radio? Start at **[cdomotor-g.github.io/quansheng_alert_ALL](https://cdomotor-g.github.io/quansheng_alert_ALL/)**
+>
+> One page for every radio: what to buy, how to tell a UV-K5 from a V3, an
+> installer that flashes both, and how to use the receiver. This repository is
+> the firmware source for the older DP32G030 radios.
+
 > ## ⚠️ This repository is archived and no longer maintained
 >
 > Development has moved to

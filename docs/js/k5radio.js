@@ -393,8 +393,9 @@ class K5Radio {
 					'PY32F071 microcontroller. This firmware is built for the DP32G030 (UV-K5, UV-K5(8), UV-K6, ' +
 					'UV-5R Plus) and cannot run on it — installing it would leave the radio unable to start. ' +
 					'Check the label under the battery: a V3 says “V3” beside the barcode, often with a model ' +
-					'like UV-K5(99). The project for that radio is armel/uv-k1-k5v3-firmware-custom.',
-				link: 'https://github.com/armel/uv-k1-k5v3-firmware-custom',
+					'like UV-K5(99). The installer at cdomotor-g.github.io/quansheng_alert_ALL handles that radio, ' +
+					'with ALERT receiver firmware built for it.',
+				link: 'https://cdomotor-g.github.io/quansheng_alert_ALL/flash/?radio=v3',
 			};
 
 		return {

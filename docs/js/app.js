@@ -327,7 +327,7 @@ function showCompatibility(info) {
 	if (info.link) {
 		$('compat-link-wrap').hidden = false;
 		$('compat-link').href = info.link;
-		$('compat-link').textContent = info.link.replace(/^https:\/\/github\.com\//, '');
+		$('compat-link').textContent = info.link.replace(/^https:\/\/(github\.com\/)?/, '');
 	} else {
 		$('compat-link-wrap').hidden = true;
 	}
