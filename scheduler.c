@@ -23,7 +23,7 @@
 #include "functions.h"
 #include "helper/battery.h"
 #include "misc.h"
-#ifdef ENABLE_ALERT_ADC
+#ifdef ENABLE_ALERT
 	#include "app/alert.h"
 #endif
 #include "settings.h"
@@ -49,10 +49,10 @@ static volatile uint32_t gGlobalSysTickCounter;
 
 void SystickHandler(void);
 
-// we come here every 10ms (or every 104 us while the ALERT ADC sampler runs)
+// we come here every 10ms (or every 104 us while the ALERT app samples a burst)
 void SystickHandler(void)
 {
-#ifdef ENABLE_ALERT_ADC
+#ifdef ENABLE_ALERT
 	if (gAlertAdcRun) {
 		static uint8_t adcDivider;
 		ALERT_AdcTick();

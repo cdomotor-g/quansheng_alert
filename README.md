@@ -13,8 +13,9 @@
 >
 > **This does not mean the firmware here is broken.** The last release works, the
 > sources build, and the [web installer](https://cdomotor-g.github.io/quansheng_alert/)
-> still flashes a **DP32G030** radio. What stops is maintenance: no further fixes,
-> features or station-table refreshes will land here.
+> still flashes a **DP32G030** radio. What stops is new work: features land in the
+> V3 port. The one exception so far is the decoder, which was brought in line with
+> the V3's on-air-proven one in October 2026 (see [Status](#status)).
 >
 > **Which repository do you want?** Take the battery off and read the label.
 >
@@ -31,7 +32,8 @@ Custom firmware for the Quansheng UV-K5 / UV-K5(8) / UV-K6 family (DP32G030 MCU 
 BK4819 radio) that turns the handheld into a portable **ALERT flood-warning
 telemetry receiver**:
 
-* captures the 300-baud ALERT bursts the field stations transmit on 151.500 MHz,
+* captures the 300-baud ALERT bursts the field stations transmit on 151.500 MHz
+  (through [a one-capacitor hardware mod](#the-hardware-mod)),
 * decodes the 13-bit station address and 11-bit value (ALERT Binary Format and
   Enhanced IFLOWS Format, exactly as MegaNet's `packets.js` does),
 * looks the address up in a station table generated from the
@@ -56,11 +58,26 @@ spectrum analyser, DTMF calling, VOX, AM fix, small-bold font, scan ranges). Any
 them can be switched back on with `make ENABLE_xxx=1` if you shrink the station
 table to compensate.
 
-> **Status: built and unit-tested, not yet tried on air.** Nothing in this repo has
-> been run on a real radio next to a real ALERT transmitter yet. The decoder is
-> verified against MegaNet's test vectors on the host, the firmware builds and fits,
-> and every radio-facing parameter is adjustable from the radio so the first field
-> test can be done without reflashing. See [First field test](#first-field-test).
+### Status
+
+> **The decoder is the one that works on air; this radio's audio route has not been
+> tried on air yet.**
+>
+> The receive chain — software demodulator, frame scanner, burst rules — is now the
+> one [quansheng_alert_v3](https://github.com/cdomotor-g/quansheng_alert_v3) runs,
+> which decoded 22 bursts out of 22 on a UV-K5 V3 at 151.500 MHz. The V3 work found
+> three things that stopped everything here from ever decoding, and all three are
+> fixed: the signal is 1300 / 2100 Hz (V.23), not the Bell-202 1200 / 2200 Hz this
+> code assumed; the demodulator took each bit on its boundary instead of mid-bit;
+> and the BK4819's own FSK modem, the old default input, never syncs on an ALERT
+> burst at all. `test/test_alert_demod.c` runs synthesised bursts through the
+> demodulator and decoder on the host: the old code decoded 6 of 40 at a moderate
+> noise level, the new code 40 of 40.
+>
+> What is still untested: on the V3 the radio routes its audio to an ADC pin by
+> itself. This radio does not, so it needs [the hardware mod](#the-hardware-mod), and
+> nobody has yet run a modded UV-K5 next to an ALERT transmitter. See
+> [First field test](#first-field-test).
 
 ---
 
@@ -74,7 +91,7 @@ Tune the VFO to the network frequency first (151.500 MHz for the MegaNet network
 FM, narrow or wide) — the app listens on whatever the radio is tuned to.
 
 ```
- ALERT MDM        -98dBm SQ *          <- status: input, RSSI, squelch open, capturing
+ ALERT            -98dBm SQ *          <- status: RSSI, squelch open, burst being sampled
  LOUDOUN BR                            <- station name from the table
  1599              LVL                 <- value (big), sensor kind
                    #6129               <- ALERT address
@@ -89,8 +106,8 @@ FM, narrow or wide) — the app listens on whatever the radio is tuned to.
 | **MENU** | settings (below) |
 | **▲ / ▼** | fine squelch level up / down (0.0 … 9.0), applied immediately |
 | **\*** | voice announcements on / off |
-| **F (#)** | monitor: un-mute the audio so you hear the bursts |
-| **1** | raw view: sync/frame/gated counters and the first bytes of the last capture |
+| **F (#)** | monitor: the speaker opens while the squelch is, so you hear each burst |
+| **1** | raw view: burst, decode, gated and inverted counters, peak and noise floor, the ADC level of the last burst, its first bits |
 | **5** | say the last reading again |
 | **0** | clear history and counters |
 
@@ -105,7 +122,10 @@ one five nine nine"). Needs menu `Voice` set to English and voice on (`*`). Unkn
 addresses are announced too unless `UNKNOWN` is set to `HIDE`.
 
 Each decoded reading is also written to the UART (the programming cable, 38400 8N1)
-as `ALERT,<id>,<value>,<ABF|EIF>,<rssi dBm>,<name>` so a laptop can log it.
+as `ALERT,<id>,<value>,<ABF|EIF>,<rssi dBm>,<name>` so a laptop can log it. The
+cable's *receive* line is the ADC input while the app runs (see
+[the hardware mod](#the-hardware-mod)), so the installer and CHIRP cannot talk to
+the radio until you leave the app.
 
 ### Settings (MENU inside the app)
 
@@ -113,21 +133,11 @@ as `ALERT,<id>,<value>,<ABF|EIF>,<rssi dBm>,<name>` so a laptop can log it.
 
 | Row | Meaning | Default |
 |---|---|---|
-| `INPUT` | `BK MODEM` = the BK4819 FSK engine as a bit slicer (no hardware change). `ADC PA8` = MCU ADC software demodulator (needs the one-wire mod below). | BK MODEM |
-| `POLARITY` | Async framing polarity. `NEG` = start 1 / stop 0 (Australian ALERT hardware), `STD` = start 0 / stop 1, `ANY` tries both. | NEG |
 | `VOICE` | speak new readings | ON |
-| `SQ GATE` | accept a capture only if the squelch was open during it (kills noise decodes) | ON |
-| `UNKNOWN` | show / hide addresses that are not in the station table | SHOW |
+| `SQ GATE` | a squelch opening counts as a burst only if its peak RSSI is 15 dB above the noise floor (a slow minimum of the RSSI) — at low squelch settings the squelch opens on noise too | ON |
+| `UNKNOWN` | show / hide addresses that are not in the station table (they are counted either way) | SHOW |
 | `CONFIRM` | require the same reading twice inside one burst | OFF |
-| `MONITOR` | audio un-muted | OFF |
-| `MDM MODE` | BK4819 FSK receive mode: `FFSK1218` (1200/1800 Hz tone pair), `FFSK1224`, `SAME` (NOAA SAME demodulator, 1562/2083 Hz), `DIRECT` (carrier FSK) | FFSK1218 |
-| `BAUD` | bit clock: 200 / 300 / 600 / 1200 | 300 |
-| `SYNC` | the sync word the engine waits for: `0000` / `FFFF` / `AAAA` / `5555`. With an ALERT preamble (idle tone) `0000` or `FFFF` matches the preamble itself, so the capture starts before the data. | 0000 |
-| `SYNC LEN` | 2 or 4 sync bytes | 2 |
-| `INVERT` | invert the modem data | OFF |
-| `BIT REV` | reverse the bit order inside each captured byte | OFF |
-| `RX GAIN` | modem RX gain 0–3 | 3 |
-| `CAPTURE` | bytes captured per sync (16–240; 96 bytes = 768 bits = 2.5 s at 300 baud) | 96 |
+| `MONITOR` | open the speaker while the squelch is open, to hear the bursts | OFF |
 | `SQL LEVEL` | the fine squelch, same as ▲/▼ | — |
 
 ### Fine squelch (whole radio, not just the app)
@@ -308,6 +318,10 @@ the screen stays blank.
 3. Tune to **151.500 MHz**, FM.
 4. **F** then **0** opens the ALERT receiver.
 
+It decodes only with [the hardware mod](#the-hardware-mod) fitted; without it the
+app runs, counts bursts and shows their signal strength, but has no audio to
+decode.
+
 ## The installer, and hosting it
 
 The installer is a static page in [`docs/`](docs/) — no build step, no frameworks, no
@@ -375,6 +389,27 @@ how ALERT addresses are allocated in practice, and the lookup is a binary search
 flash. ALERT addresses are only unique per region (about 600 are reused across
 Australia), which is another reason the table is regional.
 
+## The hardware mod
+
+The app samples the receiver's audio with the microcontroller's ADC. On this radio
+that audio reaches no ADC pin, so it needs one capacitor:
+
+> **BK4819 pin 8 (EARO, the audio output) → 100 nF capacitor → DP32G030 pin 9
+> (PA8, ADC channel 3).**
+
+PA8 is also UART1 RX, the programming cable's receive line. The app makes it an
+ADC input only while it runs and gives it back on exit, so programming and the
+installer still work — just not while the ALERT screen is up.
+
+The raw view (`1`) shows what the pin sees: `ADC lo-hi Mmean` over the last burst,
+in counts of 0–4095.
+
+| What it shows | What it means |
+|---|---|
+| a spread of a few hundred counts or more around the middle | audio is arriving |
+| a spread of a few counts | no audio: the capacitor is not connected, or the AF is not reaching EARO |
+| `lo` at 0 or `hi` at 4095 | the input is clipping: the pin has no DC bias behind the capacitor. Two 100 kΩ resistors from PA8, one to 3.3 V and one to ground, hold it at mid-rail |
+
 ## How the receiver works
 
 **ALERT (ERTS) format.** A reading is four 10-bit asynchronous words at 300 baud —
@@ -388,49 +423,54 @@ check bits per frame, roughly 1 random 40-bit window in 256 looks valid, so the 
 additionally gates captures on the squelch, prefers the negative polarity, and can
 demand two copies of a reading (`CONFIRM`).
 
-**Input 1 — BK4819 FSK engine ("BK MODEM").** The BK4819 has a packet modem meant
-for 1200-baud FFSK messaging; it cannot demodulate Bell-202 300-baud AFSK as a
-packet, but it can be used as a bit slicer: its 1200/1800 Hz tone discriminator
-still separates 1200 Hz from 2200 Hz, its bit clock (`REG_72`) is set to 300 baud,
-and its sync word is set to the idle pattern so every burst is dumped raw into the
-FIFO, where the software framer takes over. This is the same trick the TA1JS APRS
-firmware uses to receive 1200-baud AX.25. Whether the chip's clock recovery holds at
-300 baud is the one thing only a field test can answer, hence every modem parameter
-is on the settings screen and the raw view shows what came in.
+**The audio.** While the app runs, the BK4819's AF output stays selected (FM), so
+EARO always carries the demodulated audio; the speaker is switched separately, by
+`MONITOR`. (The old code left the AF muted unless `MONITOR` was on, so the ADC
+would have sampled silence.)
 
-**Input 2 — MCU ADC ("ADC PA8").** The proven way to decode odd FSK on this radio
-(dkoryto's RS41 radiosonde firmware) is to sample the discriminator audio with the
-MCU's SAR ADC. This firmware includes a 9600 Hz sampler driven from SysTick, DC
-removal, two 16-sample quadrature correlators at 1200 Hz and 2200 Hz, a bit-clock
-DPLL and the same framer. It needs a one-wire hardware modification:
+**Sampling.** When the squelch opens, SysTick is switched to 9600 Hz and every tick
+reads PA8 into `app/alert_demod.c`: DC removal, two 16-sample quadrature
+correlators at 2100 Hz and 1312.5 Hz, a bit-clock DPLL that locks to the
+transitions, and a bit taken half a bit after each transition. It stops 40 ms after
+the squelch closes (a flicker inside that is the same burst), or 2 s into a squelch
+that stays open. Sampling only during bursts is how the V3 does it: the sampler's
+own interference is why fagci's spectrum code dropped the same arrangement.
 
-> **BK4819 pin 8 (EARO, the audio output) → 100 nF capacitor → DP32G030 pin 9
-> (PA8, ADC channel 3).** PA8 is also UART1 RX (the programming cable), which the app
-> reconfigures as an ADC input only while `ADC PA8` is selected and restores on exit,
-> so programming still works.
+**Which openings count.** A burst qualifies if the squelch was open for 100 ms to
+1.5 s and, with `SQ GATE` on, its peak RSSI was 15 dB above the noise floor.
+
+**Decoding.** The bits are scanned twice, as received and complemented — the data
+sense is a separate axis from the framing polarity, and an inverted signal frames
+up and then fails every check bit — with both framings each time, and a frame only
+counts with 12 idle bits ahead of it (or straight behind a frame that already
+counted). ABF pins down only about 8 bits per frame, so without the idle gate
+roughly a quarter of noise captures would yield a "decode"; with it, the host test
+gets none from 200 bursts of pure noise.
+
+The BK4819's own FSK modem used to be a second input. On the V3 it never once
+synced on an ALERT burst in 23 arrangements — its modes are fixed tone pairs, and
+none is 1300/2100 Hz at 300 baud — so it is gone, and its eight settings with it.
 
 ## First field test
 
-1. Flash, set the VFO to 151.500 MHz FM, set `Sql` so the static just closes.
-2. `F` `0` to open ALERT RX. The status line shows RSSI and `SQ` when the squelch is
-   open; `*` appears while a capture is running.
-3. Press `1` for the raw view and wait for a station transmission (a short
-   two-tone burst). `SYNC` should count up when a burst arrives. If it never does,
-   try `SYNC` `FFFF` (idle tone is the other Bell-202 tone), then `MDM MODE` `SAME`.
-4. If `SYNC` counts but `FRM` stays at zero, look at the 20 bits shown: a good
-   capture has long runs of the idle level with 10-bit words in it. Try `INVERT`,
-   then `BIT REV`, then `POLARITY ANY`. `RX GAIN` 0–2 helps with strong signals.
-5. If the modem path cannot be made to lock at 300 baud, fit the capacitor and select
-   `INPUT` `ADC PA8` — the software demodulator is independent of the modem.
-6. Once it decodes, turn `SQ GATE` back on if you turned it off, and set `VOICE`.
+1. Fit [the capacitor](#the-hardware-mod). Flash, set the VFO to 151.500 MHz FM,
+   and set `Sql` so the static just closes.
+2. `F` `0` opens ALERT RX. The status line shows the RSSI, `SQ` while the squelch
+   is open and `*` while a burst is being sampled.
+3. Press `1` for the raw view and wait for a station (a short warbling burst; turn
+   `MONITOR` on with `F` to hear it). `BURST` should count up for each one. If
+   `GATED` counts instead, the bursts are too weak, too long or too short: compare
+   `PEAK` with `NF`.
+4. Check the `ADC` line against the table in [the hardware mod](#the-hardware-mod).
+5. `DEC` counts readings. `INV` counts the ones that only decoded with the data
+   complemented — useful to know, but nothing to change.
 
-Please record what worked (mode, sync, invert, polarity) so the defaults can be
-fixed in `ALERT_LoadConfig()`.
+Please report what the raw view showed, decoded or not.
 
 ## Not covered (yet)
 
 * **ALERT2** (AirLink, 4800 bps FSK with Reed–Solomon and convolutional FEC) is out
-  of scope for the BK4819 modem; the ADC path could carry it later. The decoder
+  of scope at a 9600 Hz sample rate. The decoder
   already understands the ALERT2 "concentration" record (`ALERT_DecodeA2C`) so an
   ALERT2 receiver's serial output could be relayed through the same display code.
 * Rain totals in millimetres need the per-station bucket size, which MegaNet does not
@@ -439,13 +479,16 @@ fixed in `ALERT_LoadConfig()`.
 ## Layout
 
 ```
-app/alert.c            the app: modem/ADC capture, screens, settings, voice, UART
-app/alert_decode.c     pure decoder (ABF / EIF / A2C), host-testable
+app/alert.c            the app: burst capture, screens, settings, voice, UART
+app/alert_demod.c      software AFSK demodulator, host-testable (same as the V3's)
+app/alert_decode.c     frame scanner and decoder (ABF / EIF / A2C), host-testable
+                       (identical to quansheng_alert_v3's App/app/alert_decode.c)
 app/alert_stations.c   flash table lookup
 app/alert_stations_gen.h   GENERATED from MegaNet — do not edit
 tools/gen_stations.py  generator (stdlib only) + tools/test_gen_stations.py
 stations.filter        which networks go into the table
 test/                  host unit tests: make -C test, npm test
+                       test_alert_demod.c: synthesised bursts through demod + decoder
 docs/                  the web installer served by GitHub Pages
 docs/js/k5protocol.js  UV-K5 wire protocol (framing, obfuscation, CRC, commands)
 docs/js/k5radio.js     Web Serial transport: backup, restore, flash

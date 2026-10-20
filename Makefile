@@ -18,7 +18,6 @@ ENABLE_FLASHLIGHT             ?= 1
 
 # ---- QUANSHENG_ALERT ----
 ENABLE_ALERT                  ?= 1
-ENABLE_ALERT_ADC              ?= 1
 
 # ---- CUSTOM MODS ----
 ENABLE_BIG_FREQ               ?= 1
@@ -135,6 +134,7 @@ endif
 ifeq ($(ENABLE_ALERT), 1)
 OBJS += app/alert.o
 OBJS += app/alert_decode.o
+OBJS += app/alert_demod.o
 OBJS += app/alert_stations.o
 endif
 OBJS += app/scanner.o
@@ -262,9 +262,6 @@ CFLAGS += -DAUTHOR_STRING=\"$(AUTHOR_STRING)\" -DVERSION_STRING=\"$(VERSION_STRI
 
 ifeq ($(ENABLE_ALERT),1)
 CFLAGS += -DENABLE_ALERT
-ifeq ($(ENABLE_ALERT_ADC),1)
-CFLAGS += -DENABLE_ALERT_ADC
-endif
 endif
 ifeq ($(ENABLE_SPECTRUM),1)
 CFLAGS += -DENABLE_SPECTRUM
